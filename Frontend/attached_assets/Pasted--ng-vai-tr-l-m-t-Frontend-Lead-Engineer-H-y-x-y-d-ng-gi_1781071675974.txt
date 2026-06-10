@@ -1,0 +1,42 @@
+Đóng vai trò là một Frontend Lead Engineer. Hãy xây dựng giao diện hoàn chỉnh (Single Page Application) cho bản MVP của đồ án: "Hệ sinh thái Học ngoại ngữ và Thi đấu Flashcard trực tuyến". Dự án này KHÔNG CÓ BACKEND, toàn bộ logic kết nối dữ liệu sẽ được giả lập (mock) trực tiếp trên Frontend.
+
+Công nghệ sử dụng (Tech Stack):
+- Khung dự án: React (Vite).
+- Styling: Tailwind CSS.
+- Biểu tượng và Hiệu ứng: Lucide React (Icons), Framer Motion (để làm hiệu ứng lật thẻ 3D mượt mà).
+
+Hệ thống thiết kế (Design System & Màu sắc):
+BẮT BUỘC cấu hình bảng màu sau vào file Tailwind config và áp dụng xuyên suốt ứng dụng:
+- Màu chính (Primary): #4B0082 (Tím - Dùng cho Header, Icon chính, viền, nút bấm chính).
+- Màu nhấn (Accent): #FF6F61 (Cam Coral - Dùng cho các điểm nhấn nổi bật, hiệu ứng hover, icon ngọn lửa Streak).
+- Màu xanh lá (Emerald Green): #2E8B57 (Dùng cho nút đáp án đúng, trạng thái thành công, nút "Easy").
+- Màu xanh dương (Cobalt Blue): #0047AB (Dùng cho thẻ thông tin, nút "Good").
+- Màu hồng pastel (Salmon Pink): #FA8072 (Dùng cho thông báo phụ, nút "Hard").
+- Màu nền (Background): #FFFFFF.
+- Màu chữ chính (Text): #333333.
+Giao diện phong cách EdTech hiện đại, gọn gàng, góc bo tròn (rounded-xl).
+
+Cấu trúc ứng dụng & Các màn hình (Views):
+Xây dựng một Layout chính gồm Sidebar bên trái (có menu điều hướng) và khu vực Content bên phải. Sử dụng React State để chuyển đổi qua lại giữa 4 màn hình sau:
+
+1. Màn hình Dashboard:
+- Hiển thị Profile người dùng, chuỗi ngày học liên tục (Streak - dùng icon ngọn lửa #FF6F61), tổng số từ đã học.
+- Danh sách các "Bộ bài gần đây" (Recent Decks) hiển thị dưới dạng Grid Component.
+
+2. Màn hình Create Deck (Tạo bộ bài thông minh):
+- Một form với textarea lớn để người dùng dán văn bản.
+- 2 công tắc (Toggle switches): "Tự động dịch" và "Sinh âm thanh".
+- Nút "Tạo bộ bài": Khi click, hiển thị trạng thái Loading Animation trong 2.5 giây (dùng setTimeout để giả lập thời gian xử lý của Google Cloud Translation & TTS APIs). Sau đó render ra một danh sách gồm 5 thẻ flashcard mẫu.
+
+3. Màn hình Study Mode (Spaced Repetition):
+- Một component Flashcard kích thước lớn nằm giữa màn hình.
+- Phải có hiệu ứng lật thẻ lật (Flip Animation) khi click. Mặt trước: Từ tiếng Anh. Mặt sau: Nghĩa tiếng Việt và phiên âm.
+- Bên dưới thẻ là 3 nút bấm tương tác: "Hard" (Màu Hồng #FA8072), "Good" (Màu Xanh dương #0047AB), "Easy" (Màu Xanh lá #2E8B57). Khi click sẽ chuyển sang thẻ tiếp theo.
+
+4. Màn hình Battle Arena (Thi đấu 1v1 trực tuyến):
+- Giao diện phòng thi đấu chia đôi màn hình: "Bạn" vs "Đối thủ".
+- Sử dụng `setInterval` để giả lập (mock) luồng Realtime: Cứ mỗi 5 giây, đối thủ sẽ tự động được cộng một số điểm ngẫu nhiên để tạo cảm giác đang thi đấu thật (nhớ ghi chú bằng comment: "Thực tế sẽ dùng Firebase Firestore realtime ở đây").
+- Hiển thị câu hỏi ở giữa màn hình kèm thanh tiến trình (progress bar) đếm ngược 10 giây.
+- 4 nút đáp án lớn. Khi người dùng click, ngay lập tức đổi màu nút (Xanh lá nếu đúng, Đỏ nếu sai) và cộng điểm vào thẻ của "Bạn".
+
+Yêu cầu Code: Code phải sạch, chia các component (Sidebar, Flashcard, DeckCard) vào thư mục `components` riêng biệt để dễ dàng tải về và tích hợp vào Cloudflare Pages sau này. Thực thi lệnh khởi tạo Vite và chạy dự án ngay bây giờ.
