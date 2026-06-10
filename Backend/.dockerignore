@@ -1,0 +1,42 @@
+# ====================================================
+# CKI CLOUD G12 - Docker Ignore
+# Các file/thư mục KHÔNG được copy vào Docker image
+# ====================================================
+
+# Dependencies (sẽ được cài lại bằng npm ci trong container)
+node_modules
+
+# Biến môi trường (secrets không được đưa vào image)
+.env
+.env.local
+.env.*.local
+
+# File cấu hình editor/IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Git
+.git
+.gitignore
+
+# Docker (tránh đệ quy)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Tài liệu
+README.md
+docs
+
+# Test files
+__tests__
+*.test.js
+*.spec.js
+coverage

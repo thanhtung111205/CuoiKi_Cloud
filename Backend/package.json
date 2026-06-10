@@ -1,0 +1,28 @@
+{
+  "name": "cki-cloud-g12-backend",
+  "version": "1.0.0",
+  "description": "RESTful API & WebSocket Server cho Hệ sinh thái Học ngoại ngữ và Thi đấu Flashcard - MVP",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [
+    "flashcard",
+    "language-learning",
+    "realtime-battle",
+    "socket.io",
+    "express"
+  ],
+  "author": "CKI Cloud G12",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
