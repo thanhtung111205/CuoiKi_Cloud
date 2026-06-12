@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Flame, BookOpen, Trophy, Target, TrendingUp, Star } from "lucide-react";
 import DeckCard from "@/components/DeckCard";
 import { mockDecks } from "@/data/mockData";
+import { useAuth } from "@/context/AuthContext";
 
 interface DashboardProps {
   onStudy: (deckId: number) => void;
@@ -15,6 +16,16 @@ const statsData = [
 ];
 
 export default function Dashboard({ onStudy }: DashboardProps) {
+  const { user } = useAuth();
+
+  // Hàm xác định buổi trong ngày
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Chào buổi sáng";
+    if (hour < 18) return "Chào buổi chiều";
+    return "Chào buổi tối";
+  };
+
   return (
     <div className="p-8 space-y-8">
       {/* Header */}
@@ -25,7 +36,7 @@ export default function Dashboard({ onStudy }: DashboardProps) {
             animate={{ opacity: 1, y: 0 }}
             className="text-3xl font-bold text-gray-900"
           >
-            Chào buổi sáng, Văn A! 👋
+            {getGreeting()}, {user?.fullName || "bạn"}! 👋
           </motion.h1>
           <p className="text-gray-500 mt-1">Hãy tiếp tục chuỗi học tập của bạn hôm nay</p>
         </div>

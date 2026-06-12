@@ -8,6 +8,9 @@
 # Sử dụng Node.js 20 Alpine (nhẹ, bảo mật, phù hợp production)
 FROM node:20-alpine
 
+# Cài đặt OpenSSL và tương thích libc cho Prisma Engine
+RUN apk add --no-cache openssl libc6-compat
+
 # Đặt thư mục làm việc trong container
 WORKDIR /app
 
@@ -22,6 +25,9 @@ RUN npm ci --only=production
 # --- Stage 3: Copy source code ---
 # Copy toàn bộ mã nguồn vào container
 COPY . .
+
+# Khởi tạo Prisma Client trong container
+RUN npx prisma generate
 
 # --- Stage 4: Cấu hình runtime ---
 # Mở cổng 8080 (Google Cloud Run mặc định sử dụng cổng này)

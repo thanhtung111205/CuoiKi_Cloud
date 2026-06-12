@@ -6,8 +6,19 @@
 const express = require("express");
 const router = express.Router();
 
-// Import controllers
+// Import controllers & middleware
 const deckController = require("../controllers/deckController");
+const authController = require("../controllers/authController");
+const authMiddleware = require("../middlewares/authMiddleware");
+
+// -----------------------------------------------
+// AUTH ROUTES
+// -----------------------------------------------
+// Đăng nhập / Đăng ký qua Google ID Token (Firebase Auth)
+router.post("/auth/google-login", authController.googleLogin);
+
+// Lấy thông tin user hiện tại (Sử dụng JWT do hệ thống của ta phát hành)
+router.get("/auth/me", authMiddleware, authController.getMe);
 
 // -----------------------------------------------
 // POST /api/generate-deck
@@ -29,3 +40,4 @@ router.get("/health", (req, res) => {
 });
 
 module.exports = router;
+
