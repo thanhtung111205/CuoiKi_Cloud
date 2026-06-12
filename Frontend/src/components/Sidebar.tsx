@@ -81,7 +81,11 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         </div>
         
         <button
-          onClick={logout}
+          onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn đăng xuất khỏi FlashMaster?")) {
+              logout();
+            }
+          }}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-red-200 hover:text-white hover:bg-red-500/20 transition-all duration-200 cursor-pointer"
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />
