@@ -12,9 +12,34 @@ services:
       context: ./Backend
       dockerfile: Dockerfile
     container_name: cki_cloud_backend
+    command: sh -c "npx prisma db push && node src/index.js"
     restart: unless-stopped
     ports:
       - "8080:8080"
+    env_file:
+      - ./Backend/.env
     environment:
       PORT: 8080
       NODE_ENV: production
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/flashcard_db?schema=public&connection_limit=5"
+    depends_on:
+      - db
+
+  # ==========================================
+  # DATABASE - PostgreSQL 15 (Local Development)
+  # ==========================================
+  db:
+    image: postgres:15-alpine
+    container_name: cki_cloud_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flashcard_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
