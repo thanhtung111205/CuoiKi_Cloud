@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import CreateDeck from "@/pages/CreateDeck";
 import StudyMode from "@/pages/StudyMode";
 import BattleArena from "@/pages/BattleArena";
 import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
+import ForgotPassword from "@/pages/ForgotPassword";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 type View = "dashboard" | "create" | "study" | "battle";
@@ -21,37 +24,87 @@ function MainApp() {
     );
   }
 
-  // Nếu chưa đăng nhập, kết xuất màn hình đăng nhập
-  if (!user) {
-    return <Login />;
-  }
-
-  const handleStudy = (_deckId: number) => {
-    setActiveView("study");
-  };
-
-  const renderContent = () => {
-    switch (activeView) {
-      case "dashboard":
-        return <Dashboard onStudy={handleStudy} />;
-      case "create":
-        return <CreateDeck />;
-      case "study":
-        return <StudyMode onBack={() => setActiveView("dashboard")} />;
-      case "battle":
-        return <BattleArena />;
-      default:
-        return <Dashboard onStudy={handleStudy} />;
-    }
-  };
-
   return (
-    <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
-      <Sidebar activeView={activeView} onNavigate={setActiveView} />
-      <main className="flex-1 overflow-y-auto">
-        {renderContent()}
-      </main>
-    </div>
+    <Routes>
+      {/* Authentication Routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+
+      {/* Protected Routes */}
+      {user ? (
+        <>
+          <Route
+            path="/"
+            element={
+              <Dashboard
+                onStudy={() => setActiveView("study")}
+              />
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar
+                  activeView={activeView}
+                  onNavigate={setActiveView}
+                />
+                <main className="flex-1 overflow-y-auto">
+                  <Dashboard
+                    onStudy={() => setActiveView("study")}
+                  />
+                </main>
+              </div>
+            }
+          />
+          <Route
+            path="/create"
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar
+                  activeView={activeView}
+                  onNavigate={setActiveView}
+                />
+                <main className="flex-1 overflow-y-auto">
+                  <CreateDeck />
+                </main>
+              </div>
+            }
+          />
+          <Route
+            path="/study"
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar
+                  activeView={activeView}
+                  onNavigate={setActiveView}
+                />
+                <main className="flex-1 overflow-y-auto">
+                  <StudyMode onBack={() => setActiveView("dashboard")} />
+                </main>
+              </div>
+            }
+          />
+          <Route
+            path="/battle"
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar
+                  activeView={activeView}
+                  onNavigate={setActiveView}
+                />
+                <main className="flex-1 overflow-y-auto">
+                  <BattleArena />
+                </main>
+              </div>
+            }
+          />
+        </>
+      ) : (
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      )}
+    </Routes>
   );
 }
 

@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 // Lưu ý: Trong môi trường thực tế, hãy cấu hình các giá trị này vào file .env
 // Ví dụ: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, ...
@@ -23,4 +23,9 @@ export const googleProvider = new GoogleAuthProvider();
 // Cấu hình prompt chọn tài khoản mỗi lần bấm đăng nhập
 googleProvider.setCustomParameters({
   prompt: "select_account",
+});
+
+// Đặt chế độ persistence để giữ session đăng nhập
+setPersistence(auth, browserLocalPersistence).catch(err => {
+  console.error("Lỗi thiết lập persistence:", err);
 });
