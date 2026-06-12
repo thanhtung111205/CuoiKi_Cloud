@@ -17,12 +17,14 @@
   "author": "CKI Cloud G12",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1067.0",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
     "firebase-admin": "^14.0.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
     "prisma": "^5.22.0",
     "socket.io": "^4.8.1"
   },
