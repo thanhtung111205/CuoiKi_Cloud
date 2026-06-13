@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { signOut, User as FirebaseUser } from "firebase/auth";
+import { signOut, User as FirebaseUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { auth } from "../config/firebase";
 
 export interface UserProfile {
@@ -14,6 +14,9 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   loginWithGoogleToken: (idToken: string) => Promise<void>;
+  loginWithEmail: (email: string, password: string, turnstileToken: string) => Promise<void>;
+  signupWithEmail: (email: string, password: string, fullName: string, turnstileToken: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
 }
@@ -116,6 +119,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   };
 
+  // Hàm đăng nhập bằng Email/Password
+  const loginWithEmail = async (email: string, password: string, turnstileToken: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await userCredential.user.getIdToken();
+
+      // Gửi idToken và turnstileToken tới Backend
+      const response = await fetch(`${API_URL}/api/auth/email-login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          idToken, 
+          turnstileToken,
+          email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Đăng nhập thất bại.");
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (err: any) {
+      console.error("Lỗi đăng nhập email:", err);
+      setError(err.message || "Đăng nhập thất bại.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm đăng ký bằng Email/Password
+  const signupWithEmail = async (email: string, password: string, fullName: string, turnstileToken: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Update display name
+      await updateProfile(userCredential.user, {
+        displayName: fullName,
+      });
+
+      const idToken = await userCredential.user.getIdToken();
+
+      // Gửi tới Backend
+      const response = await fetch(`${API_URL}/api/auth/email-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          idToken, 
+          turnstileToken,
+          email,
+          fullName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Đăng ký thất bại.");
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (err: any) {
+      console.error("Lỗi đăng ký email:", err);
+      setError(err.message || "Đăng ký thất bại.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm gửi email reset password
+  const resetPassword = async (email: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await sendPasswordResetEmail(auth, email, {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: true,
+      });
+    } catch (err: any) {
+      console.error("Lỗi gửi reset password:", err);
+      setError(err.message || "Gửi email reset password thất bại.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -123,6 +231,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         loading,
         loginWithGoogleToken,
+        loginWithEmail,
+        signupWithEmail,
+        resetPassword,
         logout,
         error,
       }}
