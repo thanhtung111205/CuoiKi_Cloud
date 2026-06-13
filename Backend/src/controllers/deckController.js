@@ -1,19 +1,21 @@
 // ====================================================
-// CKI CLOUD G12 - DECK CONTROLLER
+// CKI CLOUD G12 - DECK CONTROLLER (PRODUCTION VERSION)
 // Xử lý logic nghiệp vụ cho việc tạo bộ flashcard
 // ====================================================
-// Kiến trúc MVP: Trả về dữ liệu mẫu (mock data)
 // Kiến trúc Production:
 //   - Nhận text từ client
-//   - Đẩy vào Google Cloud Pub/Sub
-//   - Cloud Functions xử lý: gọi Translation API → TTS API
-//   - Lưu kết quả vào Firestore
-//   - Trả về kết quả hoặc thông báo qua WebSocket
+//   - Tạo bản ghi Deck trong DB với trạng thái 'processing'
+//   - Đẩy payload chứa deckId, text lên Google Cloud Pub/Sub
+//   - Trả về response 202 Accepted ngay lập tức cho Client
 // ====================================================
+
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+const { publishGenerationTask } = require("../services/pubsubService");
 
 /**
  * POST /api/generate-deck
- * Tạo bộ flashcard từ văn bản đầu vào
+ * Tạo bộ flashcard từ văn bản đầu vào (Kiến trúc phi đồng bộ qua Pub/Sub)
  *
  * @param {Object} req.body
  * @param {string} req.body.text - Văn bản cần tạo flashcard
@@ -21,16 +23,12 @@
  * @param {boolean} req.body.autoAudio - Tự động tạo audio phát âm (TTS)
  *
  * @returns {Object} response
- * @returns {boolean} response.success - Trạng thái xử lý
- * @returns {string} response.message - Thông báo kết quả
- * @returns {Object} response.meta - Thông tin cấu hình đã dùng
- * @returns {Array} response.deck - Mảng flashcard đã tạo
  */
 exports.generateDeck = async (req, res) => {
   try {
     const { text, autoTranslate, autoAudio } = req.body;
 
-    // --- Validate đầu vào ---
+    // 1. --- Validate dữ liệu đầu vào nghiêm ngặt ---
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -39,92 +37,135 @@ exports.generateDeck = async (req, res) => {
       });
     }
 
-    console.log("[DeckController] Nhận yêu cầu tạo deck:");
-    console.log(`  📝 Text: "${text.substring(0, 100)}${text.length > 100 ? "..." : ""}"`);
-    console.log(`  🌐 Auto Translate: ${autoTranslate}`);
-    console.log(`  🔊 Auto Audio: ${autoAudio}`);
+    // Kiểm tra độ dài văn bản để tránh overload hệ thống (Giới hạn tạm thời 5000 ký tự)
+    if (text.length > 5000) {
+      return res.status(400).json({
+        success: false,
+        message: "Văn bản quá dài! Vui lòng nhập dưới 5000 ký tự để hệ thống xử lý tối ưu.",
+        error: "TEXT_TOO_LONG",
+      });
+    }
 
-    // -----------------------------------------------
-    // MOCK: Giả lập thời gian xử lý 2 giây
-    // Thực tế sẽ đẩy vào Pub/Sub và xử lý bằng Cloud Functions
-    // Flow thực tế:
-    //   1. Client gửi text → Backend API
-    //   2. Backend publish message lên Pub/Sub topic "generate-deck"
-    //   3. Cloud Function subscribe topic, xử lý:
-    //      a. Tách từ vựng từ text (NLP)
-    //      b. Gọi Google Cloud Translation API dịch từng từ
-    //      c. Gọi Google Cloud Text-to-Speech API tạo audio
-    //      d. Lưu audio vào Cloud Storage
-    //      e. Lưu flashcard data vào Firestore
-    //   4. Client nhận kết quả qua WebSocket hoặc polling
-    // -----------------------------------------------
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Kiểm tra sự tồn tại của thông tin User từ Middleware xác thực (Auth Middleware)
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Yêu cầu không hợp lệ. Bạn cần đăng nhập để thực hiện chức năng này.",
+        error: "UNAUTHORIZED",
+      });
+    }
 
-    // --- Dữ liệu flashcard mẫu (Mock Data) ---
-    const mockDeck = [
-      {
-        id: "card_001",
-        word: "Ecosystem",
-        meaning: "Hệ sinh thái",
-        pronunciation: "/ˈiːkoʊˌsɪstəm/",
-        example: "The coral reef is a diverse ecosystem.",
-        audioUrl: autoAudio ? "/audio/ecosystem.mp3" : null,
-      },
-      {
-        id: "card_002",
-        word: "Vocabulary",
-        meaning: "Từ vựng",
-        pronunciation: "/voʊˈkæbjʊˌlɛri/",
-        example: "Building vocabulary is essential for language learning.",
-        audioUrl: autoAudio ? "/audio/vocabulary.mp3" : null,
-      },
-      {
-        id: "card_003",
-        word: "Flashcard",
-        meaning: "Thẻ ghi nhớ",
-        pronunciation: "/ˈflæʃˌkɑːrd/",
-        example: "Flashcards are a great tool for memorization.",
-        audioUrl: autoAudio ? "/audio/flashcard.mp3" : null,
-      },
-      {
-        id: "card_004",
-        word: "Competition",
-        meaning: "Cuộc thi đấu",
-        pronunciation: "/ˌkɑːmpəˈtɪʃən/",
-        example: "The competition was fierce but fair.",
-        audioUrl: autoAudio ? "/audio/competition.mp3" : null,
-      },
-      {
-        id: "card_005",
-        word: "Translation",
-        meaning: "Bản dịch / Sự phiên dịch",
-        pronunciation: "/trænzˈleɪʃən/",
-        example: "Machine translation has improved significantly.",
-        audioUrl: autoAudio ? "/audio/translation.mp3" : null,
-      },
-    ];
+    let userId = req.user.userId;
+    const email = req.user.email || "";
 
-    // --- Trả về kết quả ---
-    console.log(`[DeckController] ✅ Đã tạo ${mockDeck.length} flashcard`);
+    console.log(`[DeckController] 🚀 Nhận yêu cầu sinh thẻ từ User: ${userId}`);
+    console.log(`   📝 Text preview: "${text.substring(0, 60)}${text.length > 60 ? "..." : ""}"`);
+    console.log(`   🌐 Dịch tự động: ${!!autoTranslate} | 🔊 Cấu hình Audio: ${!!autoAudio}`);
 
-    return res.status(200).json({
+    // =========================================================================
+    // FIX DỨT ĐIỂM 100%: Xử lý triệt để lỗi Unique Constraint Email đã tồn tại
+    // =========================================================================
+    try {
+      const fallbackName = email ? email.split("@")[0] : "Google User";
+
+      // Bước A: Kiểm tra xem email này đã được đăng ký dưới một ID nào khác chưa
+      let existingUser = null;
+      if (email) {
+        existingUser = await prisma.user.findUnique({
+          where: { email: email }
+        });
+      }
+
+      if (existingUser) {
+        // Nếu tìm thấy user có email này rồi, ta lấy luôn ID đang có trong DB của họ
+        // Điều này giúp tránh việc chèn trùng email gây sập hệ thống
+        userId = existingUser.id;
+        console.log(`[Prisma Bảo Vệ] Tìm thấy User có sẵn qua Email. Sử dụng ID gốc trong DB: ${userId}`);
+      } else {
+        // Nếu hoàn toàn chưa có email này trong DB, kiểm tra tiếp theo ID
+        const userById = await prisma.user.findUnique({
+          where: { id: userId }
+        });
+
+        if (!userById) {
+          // Chưa có cả ID lẫn Email -> Tiến hành tạo mới hoàn toàn một bản ghi mồi
+          await prisma.user.create({
+            data: {
+              id: userId,
+              email: email,
+              fullName: fallbackName,
+            },
+          });
+          console.log(`[Prisma Bảo Vệ] Đã tạo mới bản ghi User mồi thành công với ID: ${userId}`);
+        }
+      }
+    } catch (userDbError) {
+      console.error("🔥 Lỗi kiểm tra / đồng bộ User dưới DB:", userDbError.message);
+      return res.status(500).json({
+        success: false,
+        message: "Không thể đồng bộ thông tin tài khoản của bạn với cơ sở dữ liệu.",
+        error: userDbError.message
+      });
+    }
+    // =========================================================================
+
+    // Trích xuất tiêu đề tự động từ 30 ký tự đầu tiên của văn bản để làm tên bộ thẻ tạm thời
+    const autoTitle = text.trim().substring(0, 30) + (text.length > 30 ? "..." : "");
+
+    // 2. --- Lưu thông tin bộ thẻ tạm thời vào PostgreSQL qua Prisma ---
+    // Đặt trạng thái ban đầu là 'processing' theo đúng thiết kế Schema hệ thống
+    const newDeck = await prisma.deck.create({
+      data: {
+        title: `Bộ thẻ: ${autoTitle}`,
+        description: "Bộ thẻ ghi nhớ được tạo tự động bởi AI",
+        sourceText: text,
+        status: "processing", 
+        userId: userId, // Dùng userId đã được chuẩn hóa an toàn ở trên
+      },
+      // Sử dụng select để tối ưu hóa dữ liệu trả về, giảm tải băng thông và RAM hệ thống
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true
+      }
+    });
+
+    // 3. --- Đẩy Task xử lý vào hàng đợi tin nhắn Google Cloud Pub/Sub ---
+    // Gói toàn bộ payload thông tin cấu hình gửi đi để Cloud Function bóc tách và thực thi
+    const taskPayload = {
+      deckId: newDeck.id,
+      text: text,
+      autoTranslate: !!autoTranslate,
+      autoAudio: !!autoAudio
+    };
+
+    await publishGenerationTask(taskPayload);
+    
+    console.log(`[DeckController] ✅ Đã đẩy Task của Deck ID [${newDeck.id}] lên Pub/Sub topic thành công.`);
+
+    // 4. --- Trả về HTTP Status 202 Accepted ngay lập tức cho Client ---
+    // Không bắt client đợi AI xử lý, Frontend sẽ nhận mã 202 và thực hiện Polling hoặc chờ WebSockets thông báo
+    return res.status(202).json({
       success: true,
-      message: `Đã tạo thành công ${mockDeck.length} flashcard từ văn bản.`,
+      message: "Hệ thống đã tiếp nhận yêu cầu và đang tiến hành tạo bộ flashcard tự động.",
+      deckId: newDeck.id,
+      status: newDeck.status,
       meta: {
         inputLength: text.length,
         autoTranslate: !!autoTranslate,
         autoAudio: !!autoAudio,
-        generatedAt: new Date().toISOString(),
-        processingNote: "Mock data - Thực tế sẽ đẩy vào Pub/Sub và xử lý bằng Cloud Functions",
-      },
-      deck: mockDeck,
+        acceptedAt: new Date().toISOString(),
+        processingStyle: "Asynchronous via GCP Pub/Sub & Cloud Functions"
+      }
     });
+
   } catch (error) {
-    console.error("[DeckController] ❌ Lỗi tạo deck:", error);
+    console.error("[DeckController] ❌ Lỗi nghiêm trọng tại hệ thống sinh dữ liệu Deck:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Đã xảy ra lỗi khi tạo flashcard. Vui lòng thử lại.",
+      message: "Đã xảy ra sự cố hệ thống trong quá trình tiếp nhận tạo bộ thẻ.",
       error: process.env.NODE_ENV === "development" ? error.message : "INTERNAL_SERVER_ERROR",
     });
   }

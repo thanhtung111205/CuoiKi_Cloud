@@ -31,7 +31,7 @@ router.get("/auth/me", authMiddleware, authController.getMe);
 // Tạo bộ flashcard từ văn bản đầu vào
 // Giả lập quá trình gọi Google Cloud Translation & TTS APIs
 // -----------------------------------------------
-router.post("/generate-deck", deckController.generateDeck);
+router.post("/generate-deck", authMiddleware, deckController.generateDeck);
 
 // -----------------------------------------------
 // GET /api/health
