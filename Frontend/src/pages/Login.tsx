@@ -6,12 +6,12 @@ import { Flame, LogIn, AlertCircle, Mail, Lock, Eye, EyeOff } from "lucide-react
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import { TurnstileWidget } from "../components/TurnstileWidget";
-import { TurnstileInstance } from "react-turnstile";
+import { useTurnstile } from "react-turnstile";
 
 export default function Login() {
   const { loginWithGoogleToken, loginWithEmail } = useAuth();
   const navigate = useNavigate();
-  const turnstileRef = useRef<TurnstileInstance>(null);
+  const turnstile = useTurnstile();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function Login() {
         setError(err.message || "Đăng nhập thất bại.");
       }
       // Reset Turnstile
-      turnstileRef.current?.reset();
+      turnstile?.reset();
       setTurnstileToken(null);
     } finally {
       setLoading(false);

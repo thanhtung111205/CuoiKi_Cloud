@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Turnstile, TurnstileInstance } from "react-turnstile";
+import { Turnstile } from "react-turnstile";
 
 interface TurnstileWidgetProps {
   onVerify: (token: string) => void;
@@ -12,12 +12,12 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
   onError,
   onExpire,
 }) => {
-  const turnstileRef = useRef<TurnstileInstance>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null!);
 
   return (
     <div className="flex justify-center my-4">
       <Turnstile
-        ref={turnstileRef}
+        userRef={turnstileRef}
         sitekey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
         onVerify={onVerify}
         onError={onError}
@@ -27,8 +27,4 @@ export const TurnstileWidget: React.FC<TurnstileWidgetProps> = ({
       />
     </div>
   );
-};
-
-export const getTurnstileInstance = (ref: React.RefObject<TurnstileInstance>) => {
-  return ref.current;
 };

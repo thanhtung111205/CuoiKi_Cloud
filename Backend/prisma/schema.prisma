@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 
 generator client {
   provider = "prisma-client-js"
@@ -11,10 +10,88 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  fullName  String
-  avatarUrl String?
+  id              String          @id @default(uuid())
+  email           String          @unique
+  passwordHash    String?         @map("password_hash")
+  fullName        String          @map("full_name")
+  avatarUrl       String?         @map("avatar_url")
+  role            String          @default("user")
+  currentStreak   Int             @default(0) @map("current_streak")
+  longestStreak   Int             @default(0) @map("longest_streak")
+  lastActiveDate  DateTime?       @map("last_active_date")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  decks           Deck[]
+  progresses      StudyProgress[]
+  matchesAsP1     MatchHistory[]  @relation("Player1Matches")
+  matchesAsP2     MatchHistory[]  @relation("Player2Matches")
+  matchesAsWinner MatchHistory[]  @relation("WinnerMatches")
 
   @@map("users")
+}
+
+model Deck {
+  id              String          @id @default(uuid())
+  title           String
+  description     String?
+  sourceText      String?         @db.Text @map("source_text")
+  status          String          @default("ready") // 'processing', 'ready', 'failed'
+  userId          String          @map("user_id")
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  flashcards      Flashcard[]
+
+  @@map("decks")
+}
+
+model Flashcard {
+  id              String          @id @default(uuid())
+  deckId          String          @map("deck_id")
+  deck            Deck            @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  wordEn          String          @map("word_en")
+  meaningVi       String          @map("meaning_vi")
+  exampleSentence String?         @db.Text @map("example_sentence")
+  audioUrl        String?         @map("audio_url")
+  imageUrl        String?         @map("image_url")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  
+  progresses      StudyProgress[]
+
+  @@map("flashcards")
+}
+
+model StudyProgress {
+  id              String          @id @default(uuid())
+  userId          String          @map("user_id")
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcardId     String          @map("flashcard_id")
+  card            Flashcard       @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  interval        Int             @default(0)
+  repetition      Int             @default(0)
+  easeFactor      Float           @default(2.5) @map("ease_factor")
+  nextReviewDate  DateTime        @map("next_review_date")
+  lastReviewedAt  DateTime        @default(now()) @map("last_reviewed_at")
+
+  @@unique([userId, flashcardId]) // Đảm bảo 1 user chỉ có 1 tiến độ cho 1 thẻ
+  @@map("study_progresses")
+}
+
+model MatchHistory {
+  id              String          @id @default(uuid())
+  roomPin         String          @map("room_pin")
+  player1Id       String          @map("player1_id")
+  player1         User            @relation("Player1Matches", fields: [player1Id], references: [id])
+  player2Id       String          @map("player2_id")
+  player2         User            @relation("Player2Matches", fields: [player2Id], references: [id])
+  winnerId        String?         @map("winner_id")
+  winner          User?           @relation("WinnerMatches", fields: [winnerId], references: [id], onDelete: SetNull)
+  player1Score    Int             @default(0) @map("player1_score")
+  player2Score    Int             @default(0) @map("player2_score")
+  startedAt       DateTime        @map("started_at")
+  endedAt         DateTime        @default(now()) @map("ended_at")
+
+  @@map("match_histories")
 }

@@ -24,6 +24,9 @@ const app = express();
 // Tạo HTTP server (cần thiết để Socket.io và Express chia sẻ cùng một server)
 const server = http.createServer(app);
 
+// Import con Worker xử lý ngầm để lắng nghe hàng đợi Pub/Sub
+const { startWorker } = require("./workers/generationWorker");
+
 // --- 5. Cấu hình CORS mở rộng (cho giai đoạn development) ---
 // NOTE: Khi deploy production, thay "*" bằng domain cụ thể của Frontend
 //       Ví dụ: origin: process.env.FRONTEND_URL
@@ -385,4 +388,6 @@ server.listen(PORT, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`📅 Started at:  ${new Date().toISOString()}`);
   console.log("====================================================");
+  // Khởi chạy tiến trình nền lắng nghe task sinh bộ flashcard
+  startWorker();
 });

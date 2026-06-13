@@ -4,12 +4,12 @@ import { Flame, AlertCircle, Mail, Lock, User, Eye, EyeOff, ArrowLeft } from "lu
 import { motion } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import { TurnstileWidget } from "../components/TurnstileWidget";
-import { TurnstileInstance } from "react-turnstile";
+import { useTurnstile } from "react-turnstile";
 
 export default function Signup() {
   const { signupWithEmail } = useAuth();
   const navigate = useNavigate();
-  const turnstileRef = useRef<TurnstileInstance>(null);
+  const turnstile = useTurnstile();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export default function Signup() {
       } else {
         setError(err.message || "Đăng ký thất bại.");
       }
-      turnstileRef.current?.reset();
+      turnstile?.reset();
       setTurnstileToken(null);
     } finally {
       setLoading(false);

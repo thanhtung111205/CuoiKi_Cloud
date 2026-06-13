@@ -31,7 +31,7 @@ router.get("/auth/me", authMiddleware, authController.getMe);
 // Tạo bộ flashcard từ văn bản đầu vào
 // Giả lập quá trình gọi Google Cloud Translation & TTS APIs
 // -----------------------------------------------
-router.post("/generate-deck", deckController.generateDeck);
+router.post("/generate-deck", authMiddleware, deckController.generateDeck);
 
 // -----------------------------------------------
 // GET /api/health
@@ -44,6 +44,26 @@ router.get("/health", (req, res) => {
     uptime: `${Math.floor(process.uptime())}s`,
   });
 });
+
+const flashcardController = require("../controllers/flashcardController");
+
+// -----------------------------------------------
+// DECK ROUTES
+// -----------------------------------------------
+router.post("/decks", authMiddleware, deckController.createDeck);
+router.get("/decks", authMiddleware, deckController.getDecks);
+router.get("/decks/:id", authMiddleware, deckController.getDeckById);
+router.put("/decks/:id", authMiddleware, deckController.updateDeck);
+router.delete("/decks/:id", authMiddleware, deckController.deleteDeck);
+
+// -----------------------------------------------
+// FLASHCARD ROUTES
+// -----------------------------------------------
+router.post("/flashcards", authMiddleware, flashcardController.createFlashcard);
+router.get("/decks/:id/flashcards", authMiddleware, flashcardController.getFlashcardsByDeck);
+router.put("/flashcards/:id", authMiddleware, flashcardController.updateFlashcard);
+router.delete("/flashcards/:id", authMiddleware, flashcardController.deleteFlashcard);
+router.post("/flashcards/:id/review", authMiddleware, flashcardController.reviewFlashcard);
 
 module.exports = router;
 

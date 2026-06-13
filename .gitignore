@@ -19,6 +19,9 @@ out/
 **/.env
 **/.env.*
 
+# Google Cloud service account key
+Backend/google-key.json
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
