@@ -27,14 +27,25 @@ const server = http.createServer(app);
 // Import con Worker xử lý ngầm để lắng nghe hàng đợi Pub/Sub
 const { startWorker } = require("./workers/generationWorker");
 
-// --- 5. Cấu hình CORS mở rộng (cho giai đoạn development) ---
-// NOTE: Khi deploy production, thay "*" bằng domain cụ thể của Frontend
-//       Ví dụ: origin: process.env.FRONTEND_URL
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://cuoiki-cloud.pages.dev"
+];
+
 app.use(
   cors({
-    origin: "*", // Cho phép tất cả origin trong giai đoạn dev
+    origin: (origin, callback) => {
+      // Cho phép requests không có origin (như mobile apps hoặc curl/postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith("http://localhost:")) {
+        callback(null, true);
+      } else {
+        callback(new Error("Không được phép bởi CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
@@ -66,8 +77,9 @@ app.get("/", (req, res) => {
 
 const io = new Server(server, {
   cors: {
-    origin: "*", // Cho phép tất cả origin trong giai đoạn dev
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
