@@ -3,10 +3,7 @@ import { Flame, BookOpen, Trophy, Target, TrendingUp, Star } from "lucide-react"
 import DeckCard from "@/components/DeckCard";
 import { mockDecks } from "@/data/mockData";
 import { useAuth } from "@/context/AuthContext";
-
-interface DashboardProps {
-  onStudy: (deckId: number) => void;
-}
+import { useNavigate } from "react-router-dom";
 
 const statsData = [
   { label: "Streak hiện tại", value: "12 ngày", icon: Flame, color: "#FF6F61", bg: "rgba(255,111,97,0.1)" },
@@ -15,8 +12,9 @@ const statsData = [
   { label: "Xếp hạng", value: "#23", icon: Trophy, color: "#0047AB", bg: "rgba(0,71,171,0.1)" },
 ];
 
-export default function Dashboard({ onStudy }: DashboardProps) {
+export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Hàm xác định buổi trong ngày
   const getGreeting = () => {
@@ -128,7 +126,7 @@ export default function Dashboard({ onStudy }: DashboardProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.07 }}
             >
-              <DeckCard deck={deck} onStudy={onStudy} />
+              <DeckCard deck={deck} onStudy={() => navigate("/study")} />
             </motion.div>
           ))}
         </div>

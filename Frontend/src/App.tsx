@@ -10,11 +10,8 @@ import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
-type View = "dashboard" | "create" | "study" | "battle";
-
 function MainApp() {
   const { user, loading } = useAuth();
-  const [activeView, setActiveView] = useState<View>("dashboard");
 
   if (loading) {
     return (
@@ -36,24 +33,15 @@ function MainApp() {
         <>
           <Route
             path="/"
-            element={
-              <Dashboard
-                onStudy={() => setActiveView("study")}
-              />
-            }
+            element={<Navigate to="/dashboard" replace />}
           />
           <Route
             path="/dashboard"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
-                <Sidebar
-                  activeView={activeView}
-                  onNavigate={setActiveView}
-                />
+                <Sidebar />
                 <main className="flex-1 overflow-y-auto">
-                  <Dashboard
-                    onStudy={() => setActiveView("study")}
-                  />
+                  <Dashboard />
                 </main>
               </div>
             }
@@ -62,10 +50,7 @@ function MainApp() {
             path="/create"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
-                <Sidebar
-                  activeView={activeView}
-                  onNavigate={setActiveView}
-                />
+                <Sidebar />
                 <main className="flex-1 overflow-y-auto">
                   <CreateDeck />
                 </main>
@@ -76,12 +61,9 @@ function MainApp() {
             path="/study"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
-                <Sidebar
-                  activeView={activeView}
-                  onNavigate={setActiveView}
-                />
+                <Sidebar />
                 <main className="flex-1 overflow-y-auto">
-                  <StudyMode onBack={() => setActiveView("dashboard")} />
+                  <StudyMode />
                 </main>
               </div>
             }
@@ -90,10 +72,7 @@ function MainApp() {
             path="/battle"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
-                <Sidebar
-                  activeView={activeView}
-                  onNavigate={setActiveView}
-                />
+                <Sidebar />
                 <main className="flex-1 overflow-y-auto">
                   <BattleArena />
                 </main>
