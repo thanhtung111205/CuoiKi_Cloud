@@ -3,12 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, Trophy, RotateCcw, ArrowLeft } from "lucide-react";
 import FlashcardComponent from "@/components/FlashcardComponent";
 import { mockFlashcards } from "@/data/mockData";
+import { useNavigate } from "react-router-dom";
 
-interface StudyModeProps {
-  onBack: () => void;
-}
-
-export default function StudyMode({ onBack }: StudyModeProps) {
+export default function StudyMode() {
+  const navigate = useNavigate();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [ratings, setRatings] = useState<Record<number, "hard" | "good" | "easy">>({});
   const [finished, setFinished] = useState(false);
@@ -38,7 +36,7 @@ export default function StudyMode({ onBack }: StudyModeProps) {
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <button
-          onClick={onBack}
+          onClick={() => navigate("/dashboard")}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

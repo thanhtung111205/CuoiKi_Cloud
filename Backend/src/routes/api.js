@@ -17,6 +17,12 @@ const authMiddleware = require("../middlewares/authMiddleware");
 // Đăng nhập / Đăng ký qua Google ID Token (Firebase Auth)
 router.post("/auth/google-login", authController.googleLogin);
 
+// Đăng nhập bằng Email & Password (Firebase Auth + Cloudflare Turnstile)
+router.post("/auth/email-login", authController.emailLogin);
+
+// Đăng ký tài khoản mới bằng Email & Password (Firebase Auth + Cloudflare Turnstile)
+router.post("/auth/email-signup", authController.emailSignup);
+
 // Lấy thông tin user hiện tại (Sử dụng JWT do hệ thống của ta phát hành)
 router.get("/auth/me", authMiddleware, authController.getMe);
 
