@@ -58,7 +58,7 @@ function MainApp() {
             }
           />
           <Route
-            path="/study"
+            path="/study/:deckId"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
                 <Sidebar />

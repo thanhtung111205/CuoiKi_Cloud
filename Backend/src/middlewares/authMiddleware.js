@@ -1,5 +1,9 @@
 const admin = require("firebase-admin");
 const { getAuth } = require("firebase-admin/auth");
+const jwt = require("jsonwebtoken");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 // Kiểm tra và khởi tạo Firebase Admin SDK an toàn tuyệt đối
 try {
@@ -14,17 +18,12 @@ try {
 }
 
 /**
- * Middleware xác thực yêu cầu API sử dụng Firebase ID Token từ Google Auth
- * Định dạng yêu cầu từ Frontend: Authorization: Bearer <token>
+ * Middleware xác thực yêu cầu API sử dụng hệ thống JWT hoặc Firebase ID Token
  */
 module.exports = async (req, res, next) => {
-  // 1. Lấy chuỗi Authorization từ Header request gửi lên
   const authHeader = req.headers["authorization"] || req.headers["Authorization"];
-  
-  // 2. Cắt chuỗi để lấy phần Token mã hóa phía sau chữ "Bearer "
   const token = authHeader && authHeader.split(" ")[1];
 
-  // Nếu Frontend hoàn toàn không đính kèm Token
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -32,31 +31,49 @@ module.exports = async (req, res, next) => {
     });
   }
 
-  try {
-    // SỬA DỨT ĐIỂM LỖI 'reading 0': Gọi trực tiếp getAuth() không truyền tham số mảng để lấy instance mặc định
-    const authInstance = getAuth();
-    const decodedToken = await authInstance.verifyIdToken(token);
-    
-    /**
-     * Gán thông tin user giải mã từ Google vào object `req.user`
-     * Firebase trả về chuỗi định danh duy nhất là 'uid', map thành 'userId'
-     * để khớp hoàn toàn với các logic truy vấn database ở tầng Controller của bọn mày.
-     */
-    req.user = {
-      userId: decodedToken.uid,
-      email: decodedToken.email
-    };
+  let userId = "";
+  let email = "";
 
-    // Token hợp lệ, cho phép request đi tiếp vào Controller
-    next();
-    
-  } catch (err) {
-    // Trường hợp token bị bẻ khóa, sai cấu trúc hoặc đã hết hạn
-    console.warn("[Auth Middleware] Xác thực Firebase Token từ Google thất bại:", err.message);
-    
-    return res.status(403).json({
-      success: false,
-      message: "Token xác thực không hợp lệ hoặc đã hết hạn từ phía Google.",
-    });
+  // 1. Thử xác thực với JWT của hệ thống
+  try {
+    const jwtSecret = process.env.JWT_SECRET || "cki_cloud_g12_default_secret_key_123456";
+    const decoded = jwt.verify(token, jwtSecret);
+    userId = decoded.userId;
+    email = decoded.email;
+  } catch (jwtErr) {
+    // 2. Fallback: Thử xác thực với Firebase ID Token từ Google
+    try {
+      const authInstance = getAuth();
+      const decodedToken = await authInstance.verifyIdToken(token);
+      userId = decodedToken.uid;
+      email = decodedToken.email;
+    } catch (firebaseErr) {
+      console.warn("[Auth Middleware] Xác thực token thất bại (Cả JWT & Firebase):", firebaseErr.message);
+      
+      return res.status(403).json({
+        success: false,
+        message: "Token xác thực không hợp lệ hoặc đã hết hạn.",
+      });
+    }
   }
+
+  // 3. Chuẩn hóa/Đồng bộ hóa User ID về Database UUID dựa theo Email để tránh lỗi mismatch giữa Firebase UID và Postgres UUID
+  try {
+    if (email) {
+      const dbUser = await prisma.user.findUnique({
+        where: { email: email }
+      });
+      if (dbUser) {
+        userId = dbUser.id; // Gán ID chuẩn trong cơ sở dữ liệu
+      }
+    }
+  } catch (dbError) {
+    console.error("[Auth Middleware] ⚠️ Lỗi khi đồng bộ User ID từ DB:", dbError.message);
+  }
+
+  req.user = {
+    userId,
+    email
+  };
+  return next();
 };

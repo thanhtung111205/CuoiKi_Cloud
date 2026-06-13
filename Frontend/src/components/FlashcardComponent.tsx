@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Volume2, RotateCcw } from "lucide-react";
-import type { Flashcard } from "@/data/mockData";
-
 interface FlashcardComponentProps {
-  card: Flashcard;
+  card: {
+    id: string | number;
+    front: string;
+    back: string;
+    phonetic?: string;
+    audioUrl?: string | null;
+    imageUrl?: string | null;
+  };
   cardIndex: number;
   totalCards: number;
   onRate: (rating: "hard" | "good" | "easy") => void;
@@ -60,15 +65,21 @@ export default function FlashcardComponent({
                 Nhấp để lật thẻ
               </span>
               <h2 className="text-5xl font-bold text-white text-center">{card.front}</h2>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); }}
-                  className="flex items-center gap-1.5 text-white/60 hover:text-white transition-colors text-sm"
-                >
-                  <Volume2 className="w-4 h-4" />
-                  Phát âm
-                </button>
-              </div>
+              {card.audioUrl && (
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const audio = new Audio(card.audioUrl || undefined);
+                      audio.play().catch(err => console.error("Lỗi phát audio:", err));
+                    }}
+                    className="flex items-center gap-1.5 text-white/70 hover:text-white transition-colors text-xs bg-white/10 px-3 py-1.5 rounded-xl hover:bg-white/20"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    Phát âm
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -76,14 +87,21 @@ export default function FlashcardComponent({
           <div className="card-back rounded-2xl shadow-xl cursor-pointer select-none bg-white border-2"
             style={{ borderColor: "#4B0082" }}
           >
-            <div className="w-full h-full flex flex-col items-center justify-center p-8 gap-3">
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 gap-2">
               <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#4B0082" }}>
                 Nghĩa
               </span>
-              <h2 className="text-3xl font-bold text-gray-800 text-center">{card.back}</h2>
-              <p className="text-lg text-gray-400 font-medium">{card.phonetic}</p>
-              <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
-                <RotateCcw className="w-3.5 h-3.5" />
+              <h2 className="text-2xl font-bold text-gray-800 text-center">{card.back}</h2>
+              {card.imageUrl && (
+                <img
+                  src={card.imageUrl}
+                  alt={card.front}
+                  className="w-20 h-16 object-cover rounded-xl border border-purple-100 shadow-sm mt-1"
+                />
+              )}
+              {card.phonetic && <p className="text-sm text-gray-400 font-medium">{card.phonetic}</p>}
+              <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                <RotateCcw className="w-3 h-3" />
                 Nhấp để lật lại
               </div>
             </div>

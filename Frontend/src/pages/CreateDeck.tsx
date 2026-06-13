@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Volume2, Languages, Loader2, CheckCircle2, RotateCcw } from "lucide-react";
+import { Sparkles, Volume2, Languages, Loader2, CheckCircle2, RotateCcw, Save, ArrowRight } from "lucide-react";
 import axios from "axios";
 import { getAuth } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 
 // Định nghĩa Interface rõ ràng cho Props của Component Toggle để TypeScript không bắt bẻ
 interface ToggleProps {
@@ -41,10 +42,17 @@ function Toggle({ label, icon, value, onChange, color }: ToggleProps) {
 export default function CreateDeck() {
   const [text, setText] = useState("");
   const [autoTranslate, setAutoTranslate] = useState(true);
-  const [autoAudio, setAutoAudio] = useState(false);
+  const [autoAudio, setAutoAudio] = useState(true);
   const [loading, setLoading] = useState(false);
   const [cards, setCards] = useState<any[]>([]);
   const [deckName, setDeckName] = useState("");
+  const navigate = useNavigate();
+
+  const playAudio = (audioUrl: string) => {
+    if (!audioUrl) return;
+    const audio = new Audio(audioUrl);
+    audio.play().catch(err => console.error("Lỗi phát audio:", err));
+  };
 
   const handleCreate = async () => {
     if (!text.trim()) return;
@@ -88,20 +96,42 @@ export default function CreateDeck() {
       );
 
       if (response.data && response.data.success) {
-        const generatedCards = response.data.deck?.flashcards || [];
-        setCards(generatedCards);
+        const deckId = response.data.deckId;
+        let attempts = 0;
+        const pollTimer = setInterval(async () => {
+          attempts++;
+          try {
+            const cardsResponse = await axios.get(`${baseUrl}/api/decks/${deckId}/flashcards?limit=50`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (cardsResponse.data?.data?.length > 0) {
+              clearInterval(pollTimer);
+              const formattedCards = cardsResponse.data.data.map((card: any) => ({
+                id: card.id, word: card.wordEn, definition: card.meaningVi,
+                audioUrl: card.audioUrl, imageUrl: card.imageUrl
+              }));
+              setCards(formattedCards);
+              setLoading(false);
+            } else if (attempts >= 20) {
+              clearInterval(pollTimer);
+              alert("Quá trình xử lý AI mất nhiều thời gian. Vui lòng kiểm tra lại sau.");
+              setLoading(false);
+            }
+          } catch (pollErr) {
+            if (attempts >= 20) { clearInterval(pollTimer); setLoading(false); }
+          }
+        }, 2000);
+        return;
       } else {
-        alert("Hệ thống tiếp nhận yêu cầu nhưng chưa trả về danh sách thẻ.");
+        alert("Hệ thống tiếp nhận yêu cầu nhưng chưa trả về dữ liệu.");
       }
 
     } catch (error: any) {
       console.error("🔥 Lỗi gọi API tạo bộ bài:", error);
       const errorMsg = error.response?.data?.message || error.message;
       alert(`Không thể tạo bộ bài: ${errorMsg}`);
-    } finally {
-      // Đã sửa lại khối bọc lỗi thay cho từ khóa sai cú pháp 'compression' trước đó
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const handleReset = () => {
@@ -253,11 +283,24 @@ export default function CreateDeck() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
+            {/* Success banner */}
+            <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: "rgba(16, 185, 129, 0.08)" }}>
+              <Save className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-emerald-700">
+                  ✅ Đã tạo và lưu thành công {cards.length} flashcard vào cơ sở dữ liệu!
+                </p>
+                <p className="text-sm text-emerald-600 mt-0.5">
+                  Bộ thẻ đã được lưu tự động. Bạn có thể xem lại bất cứ lúc nào.
+                </p>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                 <h2 className="font-bold text-gray-900">
-                  Đã tạo {cards.length} flashcard từ dữ liệu thật
+                  {cards.length} flashcard đã sẵn sàng
                 </h2>
               </div>
               <button
@@ -290,9 +333,35 @@ export default function CreateDeck() {
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">{card.definition || card.back}</p>
                   </div>
-                  <Volume2 className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                  <button
+                    onClick={() => playAudio(card.audioUrl)}
+                    disabled={!card.audioUrl}
+                    className="p-2 rounded-lg transition-all hover:bg-purple-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title={card.audioUrl ? "Phát âm" : "Không có audio"}
+                  >
+                    <Volume2 className="w-4 h-4" style={{ color: card.audioUrl ? "#4B0082" : "#d1d5db" }} />
+                  </button>
                 </motion.div>
               ))}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="flex-1 py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 hover:shadow-lg"
+                style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
+              >
+                <ArrowRight className="w-4 h-4" />
+                Về Dashboard xem bộ thẻ
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-6 py-3.5 rounded-xl font-semibold border-2 transition-all hover:bg-gray-50"
+                style={{ borderColor: "#4B0082", color: "#4B0082" }}
+              >
+                Tạo bộ mới
+              </button>
             </div>
           </motion.div>
         )}

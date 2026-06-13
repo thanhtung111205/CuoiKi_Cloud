@@ -170,3 +170,222 @@ exports.generateDeck = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/decks
+ * Tạo một bộ thẻ mới thủ công
+ */
+exports.createDeck = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const userId = req.user.userId;
+
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "Tiêu đề bộ thẻ không được để trống." });
+    }
+
+    const newDeck = await prisma.deck.create({
+      data: {
+        title: title.trim(),
+        description: description ? description.trim() : null,
+        userId: userId,
+        status: "ready", // Tạo thủ công thì sẵn sàng luôn
+      },
+    });
+
+    return res.status(201).json({ success: true, data: newDeck });
+  } catch (error) {
+    console.error("[DeckController] Error creating deck:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};
+
+/**
+ * GET /api/decks
+ * Lấy danh sách bộ thẻ (có phân trang và lọc theo creatorId)
+ */
+exports.getDecks = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const creatorId = req.query.creatorId;
+    
+    if (page < 1 || limit < 1) {
+      return res.status(400).json({ success: false, message: "Page hoặc limit không hợp lệ." });
+    }
+
+    const skip = (page - 1) * limit;
+    const whereCondition = creatorId ? { userId: creatorId } : {};
+    const userId = req.user.userId;
+
+    const [totalItems, decks] = await Promise.all([
+      prisma.deck.count({ where: whereCondition }),
+      prisma.deck.findMany({
+        where: whereCondition,
+        skip: skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          _count: {
+            select: { flashcards: true }
+          },
+          flashcards: {
+            select: {
+              id: true,
+              progresses: {
+                where: { userId: userId },
+                select: { id: true }
+              }
+            }
+          }
+        }
+      })
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    // Tính toán tỷ lệ phần trăm tiến độ học (số thẻ đã học / tổng số thẻ)
+    const decksWithProgress = decks.map(deck => {
+      const totalCards = deck._count.flashcards;
+      const studiedCards = deck.flashcards.filter(f => f.progresses.length > 0).length;
+      const progressPercent = totalCards > 0 ? Math.round((studiedCards / totalCards) * 100) : 0;
+      
+      const { flashcards, ...cleanDeck } = deck;
+      return {
+        ...cleanDeck,
+        progress: progressPercent
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: decksWithProgress,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: totalItems,
+        limit: limit
+      }
+    });
+  } catch (error) {
+    console.error("[DeckController] Error fetching decks:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};
+
+/**
+ * PUT /api/decks/:id
+ * Cập nhật thông tin bộ thẻ
+ */
+exports.updateDeck = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description } = req.body;
+    const userId = req.user.userId;
+
+    const existingDeck = await prisma.deck.findUnique({ where: { id } });
+    if (!existingDeck) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bộ thẻ." });
+    }
+
+    // Kiểm tra quyền sở hữu
+    if (existingDeck.userId !== userId) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền sửa bộ thẻ này." });
+    }
+
+    const updatedDeck = await prisma.deck.update({
+      where: { id },
+      data: {
+        title: title ? title.trim() : undefined,
+        description: description !== undefined ? description : undefined,
+      }
+    });
+
+    return res.status(200).json({ success: true, data: updatedDeck });
+  } catch (error) {
+    console.error("[DeckController] Error updating deck:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};
+
+/**
+ * DELETE /api/decks/:id
+ * Xóa bộ thẻ
+ */
+exports.deleteDeck = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const existingDeck = await prisma.deck.findUnique({ where: { id } });
+    if (!existingDeck) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bộ thẻ." });
+    }
+
+    if (existingDeck.userId !== userId) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền xóa bộ thẻ này." });
+    }
+
+    await prisma.deck.delete({
+      where: { id }
+    });
+
+    return res.status(200).json({ success: true, message: "Xóa bộ thẻ thành công." });
+  } catch (error) {
+    console.error("[DeckController] Error deleting deck:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};
+
+/**
+ * GET /api/decks/:id
+ * Lấy thông tin chi tiết một bộ thẻ
+ */
+exports.getDeckById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const deck = await prisma.deck.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { flashcards: true }
+        },
+        flashcards: {
+          select: {
+            id: true,
+            progresses: {
+              where: { userId: userId },
+              select: { id: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!deck) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bộ thẻ." });
+    }
+
+    if (deck.userId !== userId) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập bộ thẻ này." });
+    }
+
+    // Tính toán tiến độ học tập
+    const totalCards = deck._count.flashcards;
+    const studiedCards = deck.flashcards.filter(f => f.progresses.length > 0).length;
+    const progressPercent = totalCards > 0 ? Math.round((studiedCards / totalCards) * 100) : 0;
+
+    const { flashcards, ...cleanDeck } = deck;
+    const deckWithProgress = {
+      ...cleanDeck,
+      progress: progressPercent
+    };
+
+    return res.status(200).json({ success: true, data: deckWithProgress });
+  } catch (error) {
+    console.error("[DeckController] Error fetching deck:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};

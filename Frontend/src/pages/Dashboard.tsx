@@ -1,9 +1,10 @@
-import { motion } from "framer-motion";
-import { Flame, BookOpen, Trophy, Target, TrendingUp, Star } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Flame, BookOpen, Trophy, Target, TrendingUp, Star, Plus, Edit2, Trash2, Search, X, Loader2, AlertCircle } from "lucide-react";
 import DeckCard from "@/components/DeckCard";
-import { mockDecks } from "@/data/mockData";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const statsData = [
   { label: "Streak hiện tại", value: "12 ngày", icon: Flame, color: "#FF6F61", bg: "rgba(255,111,97,0.1)" },
@@ -13,10 +14,61 @@ const statsData = [
 ];
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
 
-  // Hàm xác định buổi trong ngày
+  // State quản lý danh sách bộ thẻ
+  const [decks, setDecks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // State quản lý Modals
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentDeck, setCurrentDeck] = useState<any>(null);
+  
+  // Form inputs
+  const [deckTitle, setDeckTitle] = useState("");
+  const [deckDescription, setDeckDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
+  // Hàm gọi API lấy danh sách bộ thẻ
+  const fetchDecks = async () => {
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      const authToken = token || localStorage.getItem("token");
+      if (!authToken) {
+        setErrorMsg("Vui lòng đăng nhập để xem các bộ thẻ.");
+        setLoading(false);
+        return;
+      }
+      
+      const response = await axios.get(`${baseUrl}/api/decks?limit=100`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      if (response.data && response.data.success) {
+        setDecks(response.data.data || []);
+      } else {
+        setErrorMsg("Không thể tải danh sách bộ thẻ.");
+      }
+    } catch (error: any) {
+      console.error("Lỗi lấy danh sách bộ thẻ:", error);
+      setErrorMsg(error.response?.data?.message || "Lỗi khi kết nối đến máy chủ.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDecks();
+  }, [token]);
+
+  // Chào buổi
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Chào buổi sáng";
@@ -24,10 +76,109 @@ export default function Dashboard() {
     return "Chào buổi tối";
   };
 
+  // Tạo bộ thẻ thủ công
+  const handleCreateDeck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deckTitle.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const authToken = token || localStorage.getItem("token");
+      const response = await axios.post(
+        `${baseUrl}/api/decks`,
+        {
+          title: deckTitle.trim(),
+          description: deckDescription.trim(),
+        },
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
+
+      if (response.data && response.data.success) {
+        setShowCreateModal(false);
+        setDeckTitle("");
+        setDeckDescription("");
+        fetchDecks(); // Tải lại danh sách
+      }
+    } catch (err: any) {
+      alert(`Không thể tạo bộ thẻ: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Cập nhật bộ thẻ
+  const handleEditDeck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deckTitle.trim() || !currentDeck) return;
+
+    setSubmitting(true);
+    try {
+      const authToken = token || localStorage.getItem("token");
+      const response = await axios.put(
+        `${baseUrl}/api/decks/${currentDeck.id}`,
+        {
+          title: deckTitle.trim(),
+          description: deckDescription.trim(),
+        },
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
+
+      if (response.data && response.data.success) {
+        setShowEditModal(false);
+        setCurrentDeck(null);
+        setDeckTitle("");
+        setDeckDescription("");
+        fetchDecks();
+      }
+    } catch (err: any) {
+      alert(`Không thể cập nhật: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Xóa bộ thẻ
+  const handleDeleteDeck = async (deckId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Bạn có chắc chắn muốn xóa bộ thẻ này không? Tất cả các flashcard bên trong cũng sẽ bị xóa vĩnh viễn.")) return;
+
+    try {
+      const authToken = token || localStorage.getItem("token");
+      const response = await axios.delete(`${baseUrl}/api/decks/${deckId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      if (response.data && response.data.success) {
+        fetchDecks();
+      }
+    } catch (err: any) {
+      alert(`Không thể xóa bộ thẻ: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
+  // Mở modal sửa bộ thẻ
+  const openEditModal = (deck: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentDeck(deck);
+    setDeckTitle(deck.title);
+    setDeckDescription(deck.description || "");
+    setShowEditModal(true);
+  };
+
+  // Lọc bộ thẻ theo thanh tìm kiếm
+  const filteredDecks = decks.filter((deck) =>
+    deck.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (deck.description && deck.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   return (
     <div className="p-8 space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <motion.h1
             initial={{ opacity: 0, y: -10 }}
@@ -36,12 +187,25 @@ export default function Dashboard() {
           >
             {getGreeting()}, {user?.fullName || "bạn"}! 👋
           </motion.h1>
-          <p className="text-gray-500 mt-1">Hãy tiếp tục chuỗi học tập của bạn hôm nay</p>
+          <p className="text-gray-500 mt-1">Chào mừng bạn quay lại hệ thống học thông minh</p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold"
-          style={{ background: "linear-gradient(135deg, #FF6F61, #e05545)" }}>
-          <Flame className="w-4 h-4" />
-          12 ngày streak
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
+            style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
+          >
+            <Plus className="w-4 h-4" />
+            Tạo bộ bài thủ công
+          </button>
+          <button
+            onClick={() => navigate("/create")}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
+            style={{ background: "linear-gradient(135deg, #FF6F61, #e05545)" }}
+          >
+            <Star className="w-4 h-4" />
+            Tạo bằng AI
+          </button>
         </div>
       </div>
 
@@ -69,68 +233,239 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Weekly progress */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="bg-white rounded-2xl border border-gray-100 p-6"
-      >
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="font-bold text-gray-900 text-lg">Tiến độ tuần này</h2>
-            <p className="text-sm text-gray-500">Số từ học mỗi ngày</p>
-          </div>
-          <div className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold">
-            <TrendingUp className="w-4 h-4" />
-            +18% so với tuần trước
-          </div>
-        </div>
-        <div className="flex items-end gap-2 h-24">
-          {[45, 62, 38, 80, 55, 90, 72].map((val, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: `${(val / 100) * 80}px` }}
-                transition={{ delay: 0.4 + i * 0.06, duration: 0.5, ease: "easeOut" }}
-                className="w-full rounded-t-lg"
-                style={{
-                  background: i === 6 ? "linear-gradient(180deg, #FF6F61, #e05545)" : "linear-gradient(180deg, #4B0082, #7B2FBE)",
-                  opacity: i === 6 ? 1 : 0.7,
-                }}
-              />
-              <span className="text-xs text-gray-400">
-                {["T2", "T3", "T4", "T5", "T6", "T7", "CN"][i]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </motion.div>
+      {/* Search Bar */}
+      <div className="relative w-full max-w-md bg-white rounded-2xl border border-gray-150 p-1 flex items-center gap-2 shadow-sm">
+        <Search className="w-5 h-5 text-gray-400 ml-3 flex-shrink-0" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Tìm kiếm bộ bài..."
+          className="w-full py-2 bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="p-1 rounded-full hover:bg-gray-100 mr-2 text-gray-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
-      {/* Recent Decks */}
+      {/* Recent Decks section */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <h2 className="font-bold text-gray-900 text-xl flex items-center gap-2">
             <Star className="w-5 h-5" style={{ color: "#FF6F61" }} />
-            Bộ bài gần đây
+            Bộ bài của bạn
           </h2>
-          <button className="text-sm font-medium hover:underline" style={{ color: "#4B0082" }}>
-            Xem tất cả
-          </button>
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            {filteredDecks.length} bộ bài
+          </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {mockDecks.map((deck, i) => (
-            <motion.div
-              key={deck.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.07 }}
-            >
-              <DeckCard deck={deck} onStudy={() => navigate("/study")} />
-            </motion.div>
-          ))}
-        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="w-10 h-10 animate-spin text-purple-700" />
+            <p className="text-gray-500 text-sm">Đang tải danh sách bộ thẻ của bạn...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="p-8 rounded-2xl bg-red-50 border border-red-100 flex items-start gap-4">
+            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-red-800">Không thể tải dữ liệu bộ thẻ</p>
+              <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
+              <button
+                onClick={fetchDecks}
+                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-semibold hover:bg-red-700 transition-colors"
+              >
+                Tải lại trang
+              </button>
+            </div>
+          </div>
+        ) : filteredDecks.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center max-w-lg mx-auto shadow-sm space-y-4">
+            <div className="w-16 h-16 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center mx-auto">
+              <BookOpen className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800">Chưa có bộ bài nào</h3>
+            <p className="text-sm text-gray-500">
+              Hãy bắt đầu hành trình học tập bằng cách tạo bộ bài thủ công hoặc sinh tự động bằng AI!
+            </p>
+            <div className="flex justify-center gap-3 pt-2">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 bg-purple-700 text-white rounded-xl text-sm font-semibold hover:bg-purple-800 transition-colors"
+              >
+                Tạo thủ công
+              </button>
+              <button
+                onClick={() => navigate("/create")}
+                className="px-4 py-2 bg-rose-500 text-white rounded-xl text-sm font-semibold hover:bg-rose-600 transition-colors"
+              >
+                Tạo bằng AI
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {filteredDecks.map((deck, i) => (
+              <motion.div
+                key={deck.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <DeckCard
+                  deck={deck}
+                  onStudy={(id) => navigate(`/study/${id}`)}
+                  onEdit={openEditModal}
+                  onDelete={handleDeleteDeck}
+                />
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* MODAL: TẠO BỘ BÀI THỦ CÔNG */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl max-w-md w-full border border-gray-100 shadow-2xl p-6 relative overflow-hidden"
+            >
+              <button
+                onClick={() => { setShowCreateModal(false); setDeckTitle(""); setDeckDescription(""); }}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-purple-700" />
+                Tạo bộ bài mới
+              </h2>
+
+              <form onSubmit={handleCreateDeck} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Tên bộ bài</label>
+                  <input
+                    type="text"
+                    required
+                    value={deckTitle}
+                    onChange={(e) => setDeckTitle(e.target.value)}
+                    placeholder="VD: Từ vựng Du lịch"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Mô tả (Không bắt buộc)</label>
+                  <textarea
+                    value={deckDescription}
+                    onChange={(e) => setDeckDescription(e.target.value)}
+                    placeholder="VD: Các từ hay gặp khi đi sân bay, khách sạn..."
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateModal(false); setDeckTitle(""); setDeckDescription(""); }}
+                    className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting || !deckTitle.trim()}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+                    style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
+                  >
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Tạo bộ bài
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CHỈNH SỬA BỘ BÀI */}
+      <AnimatePresence>
+        {showEditModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl max-w-md w-full border border-gray-100 shadow-2xl p-6 relative overflow-hidden"
+            >
+              <button
+                onClick={() => { setShowEditModal(false); setCurrentDeck(null); setDeckTitle(""); setDeckDescription(""); }}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-purple-700" />
+                Chỉnh sửa bộ bài
+              </h2>
+
+              <form onSubmit={handleEditDeck} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Tên bộ bài</label>
+                  <input
+                    type="text"
+                    required
+                    value={deckTitle}
+                    onChange={(e) => setDeckTitle(e.target.value)}
+                    placeholder="VD: Từ vựng Du lịch"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Mô tả (Không bắt buộc)</label>
+                  <textarea
+                    value={deckDescription}
+                    onChange={(e) => setDeckDescription(e.target.value)}
+                    placeholder="Mô tả..."
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowEditModal(false); setCurrentDeck(null); setDeckTitle(""); setDeckDescription(""); }}
+                    className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting || !deckTitle.trim()}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+                    style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
+                  >
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Lưu thay đổi
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
