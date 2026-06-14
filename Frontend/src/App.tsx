@@ -4,6 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import CreateDeck from "@/pages/CreateDeck";
 import StudyMode from "@/pages/StudyMode";
+import StudyLibrary from "@/pages/StudyLibrary";
 import BattleArena from "@/pages/BattleArena";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -59,7 +60,14 @@ function MainApp() {
           />
           <Route
             path="/study"
-            element={<Navigate to="/dashboard" replace />}
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar />
+                <main className="flex-1 overflow-y-auto">
+                  <StudyLibrary />
+                </main>
+              </div>
+            }
           />
           <Route
             path="/study/:deckId"

@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const aiServices = require("../services/aiServices");
 
 /**
  * POST /api/flashcards
@@ -252,6 +253,64 @@ exports.reviewFlashcard = async (req, res) => {
     });
   } catch (error) {
     console.error("[FlashcardController] Error reviewing flashcard:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
+  }
+};
+
+/**
+ * POST /api/flashcards/generate-single
+ * Tạo thẻ thủ công: Nhập 1 từ tiếng Anh → tự động sinh nghĩa, audio, ảnh
+ */
+exports.generateSingleFlashcard = async (req, res) => {
+  try {
+    const { deckId, word } = req.body;
+    const userId = req.user.userId;
+
+    if (!deckId || !word || !word.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc: deckId hoặc word."
+      });
+    }
+
+    // Kiểm tra Deck có tồn tại và thuộc quyền sở hữu của user
+    const deck = await prisma.deck.findUnique({ where: { id: deckId } });
+    if (!deck) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy bộ thẻ." });
+    }
+    if (deck.userId !== userId) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền thêm thẻ vào bộ này." });
+    }
+
+    const trimmedWord = word.trim();
+
+    // Gọi song song các dịch vụ AI để tối ưu thời gian
+    const [meaningVi, audioUrl, imageUrl] = await Promise.all([
+      aiServices.translateText(trimmedWord),
+      aiServices.generateAudio(trimmedWord),
+      aiServices.searchImage(trimmedWord),
+    ]);
+
+    // Lưu flashcard mới vào database
+    const newFlashcard = await prisma.flashcard.create({
+      data: {
+        deckId: deckId,
+        wordEn: trimmedWord,
+        meaningVi: meaningVi,
+        audioUrl: audioUrl || null,
+        imageUrl: imageUrl || null,
+      }
+    });
+
+    console.log(`[FlashcardController] ✅ Tạo thẻ thủ công: "${trimmedWord}" → "${meaningVi}"`);
+
+    return res.status(201).json({
+      success: true,
+      message: `Đã tạo thẻ "${trimmedWord}" thành công.`,
+      data: newFlashcard
+    });
+  } catch (error) {
+    console.error("[FlashcardController] Error generating single flashcard:", error);
     return res.status(500).json({ success: false, message: "Lỗi Server Internal", error: error.message });
   }
 };

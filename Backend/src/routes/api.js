@@ -60,6 +60,7 @@ router.delete("/decks/:id", authMiddleware, deckController.deleteDeck);
 // FLASHCARD ROUTES
 // -----------------------------------------------
 router.post("/flashcards", authMiddleware, flashcardController.createFlashcard);
+router.post("/flashcards/generate-single", authMiddleware, flashcardController.generateSingleFlashcard);
 router.get("/decks/:id/flashcards", authMiddleware, flashcardController.getFlashcardsByDeck);
 router.put("/flashcards/:id", authMiddleware, flashcardController.updateFlashcard);
 router.delete("/flashcards/:id", authMiddleware, flashcardController.deleteFlashcard);
