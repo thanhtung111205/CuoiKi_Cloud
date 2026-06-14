@@ -69,6 +69,12 @@ function startWorker() {
         try {
           const definition = translatedWordsMap[word] || (autoTranslate ? "Không rõ nghĩa" : "Chưa cập nhật");
           
+          // Bỏ qua những từ không dịch được
+          if (definition === "Không rõ nghĩa") {
+            console.log(`[Worker] ⏭️ Bỏ qua từ "${word}" vì không dịch được.`);
+            return null;
+          }
+          
           const [imageUrl, audioUrl] = await Promise.all([
             searchImage(word),
             autoAudio ? generateAudio(word) : Promise.resolve("")
@@ -90,7 +96,7 @@ function startWorker() {
       // Đợi tất cả Promise hoàn thành
       const results = await Promise.all(promises);
       
-      // Lọc bỏ các từ bị lỗi (return null ở trên)
+      // Lọc bỏ các từ bị lỗi hoặc không dịch được (return null ở trên)
       const validFlashcards = results.filter(card => card !== null);
 
       if (validFlashcards.length === 0) {
