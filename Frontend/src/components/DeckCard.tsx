@@ -45,7 +45,7 @@ export default function DeckCard({ deck, onStudy, onEdit, onDelete }: DeckCardPr
   return (
     <div
       onClick={() => !isProcessing && onStudy(deck.id)}
-      className={`bg-white rounded-2xl border p-5 transition-all duration-300 group shadow-sm flex flex-col justify-between h-[230px] relative ${
+      className={`bg-white rounded-2xl border p-4 transition-all duration-300 group shadow-sm flex flex-col justify-between h-auto transition-all duration-300 relative ${
         isProcessing
           ? "border-yellow-200 bg-yellow-50/10 cursor-not-allowed"
           : isFailed
@@ -55,7 +55,7 @@ export default function DeckCard({ deck, onStudy, onEdit, onDelete }: DeckCardPr
     >
       <div>
         {/* Top Header Actions */}
-        <div className="flex items-start justify-between mb-3.5">
+        <div className="flex items-start justify-between mb-2.5">
           <div
             className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
               isProcessing
@@ -72,7 +72,7 @@ export default function DeckCard({ deck, onStudy, onEdit, onDelete }: DeckCardPr
             )}
           </div>
 
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {/* Badges */}
             {isProcessing && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 animate-pulse">
@@ -114,19 +114,19 @@ export default function DeckCard({ deck, onStudy, onEdit, onDelete }: DeckCardPr
 
         {/* Title & Description */}
         <h3
-          className={`font-bold text-gray-900 text-base mb-1 transition-colors ${
+          className={`font-bold text-gray-900 text-sm mb-0.5 transition-colors ${
             !isProcessing && "group-hover:text-purple-800"
           }`}
         >
           {deck.title}
         </h3>
-        <p className="text-xs text-gray-500 mb-4 line-clamp-2">
+        <p className="text-xs text-gray-500 mb-3 line-clamp-2">
           {deck.description || "Không có mô tả"}
         </p>
       </div>
 
       {/* Progress & Bottom Area */}
-      <div className="mt-auto space-y-3">
+      <div className="space-y-2">
         {isProcessing ? (
           <div>
             <div className="flex justify-between items-center mb-1">
@@ -157,19 +157,19 @@ export default function DeckCard({ deck, onStudy, onEdit, onDelete }: DeckCardPr
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-1 border-t border-gray-50">
-          <div className="flex items-center gap-3 text-[11px] text-gray-400">
-            <span className="flex items-center gap-1 font-medium">
-              <BookOpen className="w-3 h-3 text-purple-400" />
-              {cardCount} thẻ
+        <div className="flex items-center justify-between pt-1.5 border-t border-gray-50 gap-2 overflow-hidden">
+          <div className="flex items-center gap-2 text-[10px] text-gray-400 min-w-0">
+            <span className="flex items-center gap-0.5 font-medium whitespace-nowrap">
+              <BookOpen className="w-3 h-3 text-purple-400 flex-shrink-0" />
+              {cardCount}
             </span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3 text-gray-300" />
-              {getRelativeTime(deck.createdAt)}
+            <span className="flex items-center gap-0.5 whitespace-nowrap">
+              <Clock className="w-3 h-3 text-gray-300 flex-shrink-0" />
+              <span className="truncate">{getRelativeTime(deck.createdAt)}</span>
             </span>
           </div>
           {!isProcessing && (
-            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
           )}
         </div>
       </div>

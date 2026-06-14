@@ -66,7 +66,7 @@ exports.getFlashcardsByDeck = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const [totalItems, flashcards] = await Promise.all([
+    const [totalItems, allFlashcards] = await Promise.all([
       prisma.flashcard.count({ where: { deckId } }),
       prisma.flashcard.findMany({
         where: { deckId },
@@ -76,11 +76,14 @@ exports.getFlashcardsByDeck = async (req, res) => {
       })
     ]);
 
+    // Lọc bỏ những flashcard không dịch được (meaningVi = "Không rõ nghĩa")
+    const validFlashcards = allFlashcards.filter(card => card.meaningVi !== "Không rõ nghĩa");
+
     const totalPages = Math.ceil(totalItems / limit);
 
     return res.status(200).json({
       success: true,
-      data: flashcards,
+      data: validFlashcards,
       pagination: {
         currentPage: page,
         totalPages: totalPages,
@@ -290,6 +293,15 @@ exports.generateSingleFlashcard = async (req, res) => {
       aiServices.generateAudio(trimmedWord),
       aiServices.searchImage(trimmedWord),
     ]);
+
+    // Kiểm tra xem từ có dịch được không
+    if (meaningVi === "Không rõ nghĩa") {
+      console.log(`[FlashcardController] ⏭️ Từ "${trimmedWord}" không thể dịch được, từ chối tạo flashcard.`);
+      return res.status(400).json({
+        success: false,
+        message: `Từ "${trimmedWord}" không dịch được. Vui lòng nhập từ khác hoặc kiểm tra lại độ chính xác của từ.`
+      });
+    }
 
     // Lưu flashcard mới vào database
     const newFlashcard = await prisma.flashcard.create({
