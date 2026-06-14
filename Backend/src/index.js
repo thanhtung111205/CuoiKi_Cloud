@@ -29,7 +29,8 @@ const { startWorker } = require("./workers/generationWorker");
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://cuoiki-cloud.pages.dev"
+  "https://cuoiki-cloud.pages.dev",
+  "https://nhom12c365httt.live"
 ];
 
 app.use(

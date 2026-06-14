@@ -58,6 +58,10 @@ function MainApp() {
             }
           />
           <Route
+            path="/study"
+            element={<Navigate to="/dashboard" replace />}
+          />
+          <Route
             path="/study/:deckId"
             element={
               <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
