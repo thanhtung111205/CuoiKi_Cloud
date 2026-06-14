@@ -214,9 +214,9 @@ exports.getDecks = async (req, res) => {
       return res.status(400).json({ success: false, message: "Page hoặc limit không hợp lệ." });
     }
 
-    const skip = (page - 1) * limit;
-    const whereCondition = creatorId ? { userId: creatorId } : {};
     const userId = req.user.userId;
+    const skip = (page - 1) * limit;
+    const whereCondition = creatorId ? { userId: creatorId } : { userId: userId };
 
     const [totalItems, decks] = await Promise.all([
       prisma.deck.count({ where: whereCondition }),
