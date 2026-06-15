@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // Lưu ý: Trong môi trường thực tế, hãy cấu hình các giá trị này vào file .env
 // Ví dụ: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, ...
@@ -18,6 +19,7 @@ const app = initializeApp(firebaseConfig);
 
 // Khởi tạo các services
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Cấu hình prompt chọn tài khoản mỗi lần bấm đăng nhập
