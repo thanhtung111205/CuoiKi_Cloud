@@ -72,5 +72,7 @@ router.post("/flashcards/:id/review", authMiddleware, flashcardController.review
 // -----------------------------------------------
 router.post("/battle/submit-answer", authMiddleware, battleController.submitAnswer);
 router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
+router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
+router.get("/battle/history", authMiddleware, battleController.getHistory);
 
 module.exports = router;

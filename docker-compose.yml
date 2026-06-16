@@ -25,6 +25,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
     volumes:
       - ./Backend/google-key.json:/app/google-key.json
+      - ./Backend/firebase-db-key.json:/app/firebase-db-key.json
     depends_on:
       - db
 

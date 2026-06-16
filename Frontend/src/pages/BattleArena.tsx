@@ -24,6 +24,7 @@ export default function BattleArena() {
   const [showAnswerFeedback, setShowAnswerFeedback] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [historySaved, setHistorySaved] = useState(false);
 
   // Decks selection state
   const [decks, setDecks] = useState<any[]>([]);
@@ -434,6 +435,34 @@ export default function BattleArena() {
     };
   }, []);
 
+  // 7c. Tự động lưu lịch sử trận đấu khi trận đấu kết thúc (status === "finished")
+  useEffect(() => {
+    if (battleData && battleData.status === "finished" && !historySaved && pin) {
+      setHistorySaved(true);
+      const saveHistory = async () => {
+        try {
+          const response = await fetch(`${API_URL}/api/battle/save-history`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pin }),
+          });
+          const resData = await response.json();
+          if (response.ok && resData.success) {
+            console.log("[BattleArena] Lưu lịch sử trận đấu thành công!", resData.data);
+          } else {
+            console.warn("[BattleArena] Lưu lịch sử thất bại:", resData.message);
+          }
+        } catch (err) {
+          console.error("[BattleArena] Lỗi gọi API lưu lịch sử trận đấu:", err);
+        }
+      };
+      saveHistory();
+    }
+  }, [battleData?.status, pin, historySaved, token]);
+
   // 8. Game play logic loop (synchronizing questions)
   useEffect(() => {
     if (!battleData || battleData.status !== "playing") return;
@@ -563,6 +592,7 @@ export default function BattleArena() {
     setTurnstileToken("");
     setSelectedAnswer(null);
     setEmailSent(false);
+    setHistorySaved(false);
   };
 
   // Neon custom styles for A, B, C, D buttons

@@ -1,9 +1,11 @@
 const admin = require("firebase-admin");
 const { getFirestore } = require("firebase-admin/firestore");
+const prisma = require("../db");
 
 // Đảm bảo Firebase Admin SDK được khởi tạo an toàn
 try {
-  if (!admin.apps || admin.apps.length === 0) {
+  const existingApps = (admin.getApps ? admin.getApps() : admin.apps) || [];
+  if (existingApps.length === 0) {
     admin.initializeApp({
       projectId: process.env.FIREBASE_PROJECT_ID || "flashcard-cloud-g12-91bee",
     });
@@ -238,3 +240,184 @@ exports.sendEmail = async (req, res) => {
     return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
   }
 };
+
+/**
+ * POST /api/battle/save-history
+ * Lưu lịch sử trận đấu (MatchHistory) vào PostgreSQL qua Prisma từ thông tin Firestore
+ */
+exports.saveHistory = async (req, res) => {
+  try {
+    const { pin } = req.body;
+    if (!pin) {
+      return res.status(400).json({ success: false, message: "Thiếu mã PIN phòng đấu." });
+    }
+
+    console.log(`[battleController] Yêu cầu lưu lịch sử đấu cho phòng #${pin}`);
+
+    // 1. Kiểm tra tính trùng lặp (Idempotency check)
+    const existingMatch = await prisma.matchHistory.findFirst({
+      where: { roomPin: pin }
+    });
+
+    if (existingMatch) {
+      console.log(`[battleController] ⚠️ Trận đấu phòng #${pin} đã được lưu trước đó. Trả về thành công.`);
+      return res.json({
+        success: true,
+        message: "Lịch sử trận đấu đã được lưu trước đó.",
+        data: existingMatch
+      });
+    }
+
+    // 2. Lấy thông tin trận đấu từ Firestore
+    const roomRef = db.collection("battles").doc(pin);
+    const roomDoc = await roomRef.get();
+
+    if (!roomDoc.exists) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy phòng đấu trên hệ thống Firestore." });
+    }
+
+    const battleData = roomDoc.data();
+    if (battleData.status !== "finished") {
+      return res.status(400).json({ success: false, message: "Trận đấu chưa kết thúc, không thể lưu lịch sử." });
+    }
+
+    // 3. Xác định người chiến thắng (winnerId)
+    let winnerId = null;
+    const hostHP = battleData.hostHP ?? 1000;
+    const guestHP = battleData.guestHP ?? 1000;
+
+    if (hostHP > guestHP) {
+      winnerId = battleData.hostId;
+    } else if (guestHP > hostHP) {
+      winnerId = battleData.guestId;
+    }
+
+    if (!battleData.hostId || !battleData.guestId) {
+      return res.status(400).json({ success: false, message: "Thông tin người chơi trong phòng đấu không hợp lệ." });
+    }
+
+    // Kiểm tra xem ID người chơi có tồn tại trong database PostgreSQL không để tránh lỗi Foreign Key
+    const hostExists = await prisma.user.findUnique({ where: { id: battleData.hostId } });
+    const guestExists = await prisma.user.findUnique({ where: { id: battleData.guestId } });
+
+    if (!hostExists || !guestExists) {
+      console.error(`[battleController] Lỗi Foreign Key: Host (${battleData.hostId}) hoặc Guest (${battleData.guestId}) không tồn tại trong User table.`);
+      return res.status(400).json({
+        success: false,
+        message: "Không thể lưu lịch sử do tài khoản người chơi không tồn tại trên hệ thống DB SQL."
+      });
+    }
+
+    // 4. Ghi nhận lịch sử đấu vào PostgreSQL qua Prisma
+    const matchRecord = await prisma.matchHistory.create({
+      data: {
+        roomPin: pin,
+        player1Id: battleData.hostId,
+        player2Id: battleData.guestId,
+        winnerId: winnerId,
+        player1Score: hostHP,
+        player2Score: guestHP,
+        startedAt: new Date(battleData.createdAt || Date.now()),
+        endedAt: new Date(battleData.updatedAt || Date.now()),
+      }
+    });
+
+    console.log(`[battleController] 🏆 Đã lưu lịch sử trận đấu phòng #${pin} thành công. Người thắng: ${winnerId}`);
+    
+    return res.json({
+      success: true,
+      message: "Đã lưu lịch sử trận đấu thành công.",
+      data: matchRecord
+    });
+  } catch (error) {
+    console.error("[battleController] Lỗi khi lưu lịch sử trận đấu:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
+  }
+};
+
+/**
+ * GET /api/battle/history
+ * Lấy danh sách lịch sử đấu của một User
+ */
+exports.getHistory = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Người dùng chưa được xác thực." });
+    }
+
+    console.log(`[battleController] Lấy lịch sử đấu cho user: ${userId}`);
+
+    // Truy vấn tất cả các trận đấu mà user tham gia (ở vị trí player1 hoặc player2)
+    const matches = await prisma.matchHistory.findMany({
+      where: {
+        OR: [
+          { player1Id: userId },
+          { player2Id: userId }
+        ]
+      },
+      include: {
+        player1: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            avatarUrl: true
+          }
+        },
+        player2: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            avatarUrl: true
+          }
+        },
+        winner: {
+          select: {
+            id: true,
+            fullName: true
+          }
+        }
+      },
+      orderBy: {
+        endedAt: "desc"
+      }
+    });
+
+    // Định dạng dữ liệu để Frontend hiển thị dễ dàng hơn
+    const formattedMatches = matches.map(match => {
+      const isPlayer1 = match.player1Id === userId;
+      const myScore = isPlayer1 ? match.player1Score : match.player2Score;
+      const opponentScore = isPlayer1 ? match.player2Score : match.player1Score;
+      const opponent = isPlayer1 ? match.player2 : match.player1;
+      
+      let result = "draw"; // "win", "loss", "draw"
+      if (match.winnerId) {
+        result = match.winnerId === userId ? "win" : "loss";
+      }
+
+      return {
+        id: match.id,
+        roomPin: match.roomPin,
+        myScore,
+        opponentScore,
+        opponentName: opponent ? opponent.fullName : "Người chơi ẩn danh",
+        opponentAvatar: opponent ? opponent.avatarUrl : null,
+        result,
+        startedAt: match.startedAt,
+        endedAt: match.endedAt
+      };
+    });
+
+    return res.json({
+      success: true,
+      message: "Lấy lịch sử đấu thành công.",
+      data: formattedMatches
+    });
+  } catch (error) {
+    console.error("[battleController] Lỗi khi lấy lịch sử đấu:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
+  }
+};
+
