@@ -20,7 +20,7 @@ export default function BattleArena() {
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(10);
+  const [timeLeft, setTimeLeft] = useState(15);
   const [showAnswerFeedback, setShowAnswerFeedback] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -226,6 +226,9 @@ export default function BattleArena() {
         currentQuestionIndex: 0,
         hostHP: 1000,
         guestHP: 1000,
+        hostSelectedAnswer: null,
+        guestSelectedAnswer: null,
+        roundStartedAt: Date.now(),
         updatedAt: Date.now(),
       });
     } catch (err) {
@@ -439,25 +442,64 @@ export default function BattleArena() {
     const guestAns = battleData.guestSelectedAnswer;
     const currentQuestionIndex = battleData.currentQuestionIndex;
 
-    setSelectedAnswer((prev) => {
-      if (prev !== null && !showAnswerFeedback && hostAns === null && guestAns === null) {
-        return null;
-      }
-      return prev;
-    });
+    // Reset các trạng thái local về mặc định khi câu hỏi mới bắt đầu (cả hai đáp án trên DB đều được reset về null)
+    if (hostAns === null && guestAns === null) {
+      setSelectedAnswer(null);
+      setShowAnswerFeedback(false);
+    }
 
     clearTimers();
-    setTimeLeft(10);
-    
+
+    // Tính toán thời gian còn lại dựa trên roundStartedAt tuyệt đối từ Firestore
+    const calculateTimeLeft = () => {
+      if (!battleData.roundStartedAt) return 15;
+      const elapsed = Math.floor((Date.now() - battleData.roundStartedAt) / 1000);
+      return Math.max(0, 15 - elapsed);
+    };
+
+    const initialTime = calculateTimeLeft();
+    setTimeLeft(initialTime);
+
+    // Chạy đếm ngược thời gian đồng bộ cho cả hai client
     timerRef.current = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(timerRef.current!);
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(timerRef.current!);
+        
+        // Tự động timeout cho bản thân nếu chưa trả lời
+        if (role === "host" && hostAns === null) {
           handleQuestionTimeout();
-          return 0;
+        } else if (role === "guest" && guestAns === null) {
+          handleQuestionTimeout();
         }
-        return t - 1;
-      });
+
+        // Nếu là Host: Tự động force các đối thủ chưa trả lời về -1 để tránh đơ trận đấu (kể cả khi họ offline)
+        if (role === "host" && !bothAnswered && !showAnswerFeedback) {
+          const roomRef = doc(db, "battles", pin);
+          const updateData: any = {};
+          let needsUpdate = false;
+          
+          if (hostAns === null) {
+            updateData.hostSelectedAnswer = -1;
+            updateData.hostHP = Math.max(0, (battleData.hostHP || 1000) - 100);
+            updateData.hostDamageIndicator = "💥 -100";
+            needsUpdate = true;
+          }
+          if (guestAns === null) {
+            updateData.guestSelectedAnswer = -1;
+            updateData.guestHP = Math.max(0, (battleData.guestHP || 1000) - 100);
+            updateData.guestDamageIndicator = "💥 -100";
+            needsUpdate = true;
+          }
+          
+          if (needsUpdate) {
+            console.log("[Host] Force timeout for missing answers to prevent freeze");
+            updateDoc(roomRef, updateData).catch(e => console.error(e));
+          }
+        }
+      }
     }, 1000);
 
     const bothAnswered = hostAns !== null && guestAns !== null;
@@ -483,6 +525,7 @@ export default function BattleArena() {
               currentQuestionIndex: nextIndex,
               hostSelectedAnswer: null,
               guestSelectedAnswer: null,
+              roundStartedAt: Date.now(), // Thiết lập mốc thời gian bắt đầu câu mới
               updatedAt: Date.now(),
             });
           }
@@ -491,7 +534,15 @@ export default function BattleArena() {
     }
 
     return () => clearTimers();
-  }, [battleData?.currentQuestionIndex, battleData?.hostSelectedAnswer, battleData?.guestSelectedAnswer, battleData?.status]);
+  }, [
+    battleData?.currentQuestionIndex, 
+    battleData?.hostSelectedAnswer, 
+    battleData?.guestSelectedAnswer, 
+    battleData?.status,
+    role,
+    pin,
+    showAnswerFeedback
+  ]);
 
   // Exit Room helper
   const handleExitRoom = async () => {
@@ -974,7 +1025,7 @@ export default function BattleArena() {
               <motion.div
                 className="h-full rounded-full bg-gradient-to-r from-purple-400 to-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.8)]"
                 style={{
-                  width: `${(timeLeft / 10) * 100}%`,
+                  width: `${(timeLeft / 15) * 100}%`,
                   transition: "width 1s linear",
                 }}
               />
