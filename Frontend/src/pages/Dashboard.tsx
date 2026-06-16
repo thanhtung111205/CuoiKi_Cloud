@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, BookOpen, Trophy, Target, TrendingUp, Star, Plus, Edit2, Trash2, Search, X, Loader2, AlertCircle } from "lucide-react";
+import { Flame, BookOpen, Trophy, Target, TrendingUp, Star, Plus, Edit2, Trash2, Search, X, Loader2, AlertCircle, Bell } from "lucide-react";
 import DeckCard from "@/components/DeckCard";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { requestForToken } from "@/config/firebase";
+import { toast } from "sonner";
 
 const statsData = [
   { label: "Streak hiện tại", value: "12 ngày", icon: Flame, color: "#FF6F61", bg: "rgba(255,111,97,0.1)" },
@@ -32,6 +34,43 @@ export default function Dashboard() {
   const [deckTitle, setDeckTitle] = useState("");
   const [deckDescription, setDeckDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Trạng thái quyền thông báo FCM
+  const [notificationPermission, setNotificationPermission] = useState<string>(
+    typeof window !== "undefined" ? Notification.permission : "default"
+  );
+  const [permissionLoading, setPermissionLoading] = useState(false);
+
+  // Hàm xin quyền thông báo
+  const handleRequestPermission = async () => {
+    setPermissionLoading(true);
+    try {
+      const tokenResult = await requestForToken();
+      if (tokenResult) {
+        setNotificationPermission("granted");
+        toast.success("Đã bật thông báo thành công!", {
+          description: "Giờ đây bạn có thể nhận thông báo học tập & thách đấu thời gian thực.",
+        });
+      } else {
+        const currentPerm = typeof window !== "undefined" ? Notification.permission : "default";
+        setNotificationPermission(currentPerm);
+        if (currentPerm === "denied") {
+          toast.error("Không thể kích hoạt thông báo", {
+            description: "Bạn đã chặn quyền thông báo. Vui lòng mở lại trong cài đặt trang web.",
+          });
+        } else {
+          toast.warning("Thông báo chưa được kích hoạt", {
+            description: "Quyền thông báo chưa được cấp.",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi xin quyền nhận thông báo:", error);
+      toast.error("Đã xảy ra lỗi khi xin quyền nhận thông báo.");
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
 
   const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
@@ -208,6 +247,42 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {/* Banner xin quyền thông báo */}
+      <AnimatePresence>
+        {notificationPermission === "default" && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -20 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -20 }}
+            className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-2xl p-5 text-white flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg overflow-hidden"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                <Bell className="w-6 h-6 text-yellow-300 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Bật thông báo ứng dụng</h3>
+                <p className="text-white/80 text-sm mt-0.5">
+                  Đừng bỏ lỡ các thử thách thi đấu thời gian thực (Battle Arena) và nhắc nhở học tập hàng ngày.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleRequestPermission}
+              disabled={permissionLoading}
+              className="px-5 py-2.5 bg-white text-purple-950 rounded-xl text-sm font-bold hover:bg-purple-50 active:scale-95 transition-all shadow-md flex items-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50"
+            >
+              {permissionLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-purple-900" />
+              ) : (
+                <Bell className="w-4 h-4 text-purple-900" />
+              )}
+              Cho phép nhận tin
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

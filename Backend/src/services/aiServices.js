@@ -14,7 +14,7 @@ const translationClient = new TranslationServiceClient();
  */
 exports.translateText = async (textToTranslate) => {
   try {
-    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12'; 
+    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12';
     const location = 'global';
 
     const request = {
@@ -43,7 +43,7 @@ exports.translateText = async (textToTranslate) => {
 exports.translateTextBatch = async (wordsArray) => {
   if (!wordsArray || wordsArray.length === 0) return [];
   try {
-    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12'; 
+    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12';
     const location = 'global';
 
     const request = {
@@ -136,12 +136,12 @@ exports.generateAudio = async (word) => {
     };
 
     const [response] = await ttsClient.synthesizeSpeech(request);
-    
+
     // Sinh tên file duy nhất và upload lên Cloudflare R2
     const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const filename = `${Date.now()}_${cleanWord}.mp3`;
     const audioUrl = await uploadAudio(filename, response.audioContent);
-    
+
     console.log(`[AI Service] 🔊 TTS: "${word}" → R2 URL: ${audioUrl}`);
     return audioUrl;
   } catch (error) {
