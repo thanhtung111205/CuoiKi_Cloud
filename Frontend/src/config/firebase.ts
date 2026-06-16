@@ -14,6 +14,8 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+console.log("DEBUG Firebase Config:", firebaseConfig);
+
 // Khởi tạo Firebase
 const app = initializeApp(firebaseConfig);
 

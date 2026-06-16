@@ -37,6 +37,17 @@ function startWorker() {
 
       console.log(`[Worker] ⚙️ Bắt đầu bóc tách từ vựng cho Deck ID: ${deckId}`);
 
+      // 0. Kiểm tra Deck có tồn tại trong DB của ta không trước khi chạy các API AI tốn kém
+      const deck = await prisma.deck.findUnique({
+        where: { id: deckId }
+      });
+
+      if (!deck) {
+        console.warn(`[Worker] ⚠️ Không tìm thấy Deck ID: ${deckId} trong database. Tự động ACK để xóa tin nhắn rác khỏi hàng đợi.`);
+        message.ack();
+        return;
+      }
+
       // 1. Trích xuất danh sách từ vựng từ văn bản thô qua Custom API
       const words = await extractVocabulary(text);
       console.log(`[Worker] 📝 Tìm thấy ${words.length} từ vựng độc lập cần xử lý.`);
@@ -64,17 +75,17 @@ function startWorker() {
       }
 
       console.log(`[Worker] 🚀 Đang gọi API Sinh ảnh & TTS song song cho từng từ...`);
-      
+
       const promises = wordsToProcess.map(async (word) => {
         try {
           const definition = translatedWordsMap[word] || (autoTranslate ? "Không rõ nghĩa" : "Chưa cập nhật");
-          
+
           // Bỏ qua những từ không dịch được
           if (definition === "Không rõ nghĩa") {
             console.log(`[Worker] ⏭️ Bỏ qua từ "${word}" vì không dịch được.`);
             return null;
           }
-          
+
           const [imageUrl, audioUrl] = await Promise.all([
             searchImage(word),
             autoAudio ? generateAudio(word) : Promise.resolve("")
@@ -89,13 +100,13 @@ function startWorker() {
           };
         } catch (wordError) {
           console.error(`[Worker] ⚠️ Lỗi khi xử lý từ "${word}":`, wordError.message);
-          return null; 
+          return null;
         }
       });
 
       // Đợi tất cả Promise hoàn thành
       const results = await Promise.all(promises);
-      
+
       // Lọc bỏ các từ bị lỗi hoặc không dịch được (return null ở trên)
       const validFlashcards = results.filter(card => card !== null);
 
@@ -107,7 +118,7 @@ function startWorker() {
       await prisma.flashcard.createMany({
         data: validFlashcards
       });
-      
+
       console.log(`[Worker] 💾 Đã lưu thành công ${validFlashcards.length} thẻ vào database.`);
 
       // 4. --- XỬ LÝ XONG: CẬP NHẬT TRẠNG THÁI DECK SANG READY ---
@@ -125,15 +136,32 @@ function startWorker() {
       console.error(`[Worker] ❌ Lỗi nghiêm trọng khi xử lý tin nhắn nội bộ:`, error);
 
       // Nếu lỗi, đổi trạng thái bộ thẻ sang 'failed' để thông báo trên giao diện Frontend
+      let deckExists = false;
       if (payload && payload.deckId) {
-        await prisma.deck.update({
-          where: { id: payload.deckId },
-          data: { status: "failed" },
-        }).catch(err => console.error("Lỗi cập nhật trạng thái thất bại:", err));
+        try {
+          const updated = await prisma.deck.update({
+            where: { id: payload.deckId },
+            data: { status: "failed" },
+          });
+          deckExists = true;
+          console.log(`[Worker] ❌ Đã cập nhật trạng thái Deck ${payload.deckId} sang 'failed'.`);
+        } catch (dbError) {
+          console.error("Lỗi cập nhật trạng thái thất bại:", dbError.message);
+        }
       }
 
-      // Báo lỗi với Pub/Sub để tin nhắn được giữ lại xử lý sau
-      message.nack();
+      if (deckExists) {
+        // Nếu Deck tồn tại ở DB của ta nhưng xử lý lỗi (ví dụ: lỗi trích xuất từ vựng do văn bản không hợp lệ),
+        // ta ACK để xóa tin nhắn lỗi vĩnh viễn khỏi hàng đợi, tránh lặp lại vô ích.
+        console.log("[Worker] ACK tin nhắn lỗi của hệ thống local.");
+        message.ack();
+      } else {
+        // Nếu không tìm thấy Deck trong DB của ta (tin nhắn thuộc môi trường khác),
+        // ta trì hoãn 5s rồi NACK để nhường worker môi trường kia xử lý.
+        console.log("[Worker] NACK tin nhắn của môi trường khác sau 5 giây...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        message.nack();
+      }
     }
   });
 

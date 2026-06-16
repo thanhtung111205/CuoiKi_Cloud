@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Volume2, RotateCcw } from "lucide-react";
 interface FlashcardComponentProps {
@@ -22,6 +22,11 @@ export default function FlashcardComponent({
   onRate,
 }: FlashcardComponentProps) {
   const [flipped, setFlipped] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [card.id]);
 
   const handleFlip = () => setFlipped((f) => !f);
 
@@ -94,8 +99,9 @@ export default function FlashcardComponent({
               <h2 className="text-2xl font-bold text-gray-800 text-center">{card.back}</h2>
               {card.imageUrl && (
                 <img
-                  src={card.imageUrl}
+                  src={imgError ? `https://placehold.co/320x240/4B0082/FFFFFF?text=${encodeURIComponent(card.front)}` : card.imageUrl}
                   alt={card.front}
+                  onError={() => setImgError(true)}
                   className="w-20 h-16 object-cover rounded-xl border border-purple-100 shadow-sm mt-1"
                 />
               )}
