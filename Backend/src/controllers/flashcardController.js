@@ -207,23 +207,45 @@ exports.reviewFlashcard = async (req, res) => {
       easeFactor = progress.easeFactor;
     }
 
-    // Thuật toán SM-2 rút gọn
-    if (rating === 'hard') {
+    // ====================================================
+    // THUẬT TOÁN LẶP LẠI NGẮT QUÃNG - SM-2 (SuperMemo 2)
+    // ====================================================
+
+    // --- Bước 1: Quy đổi chuỗi rating sang điểm số q ---
+    // "hard" (Khó) → q = 1: Trả lời sai / Quên bài
+    // "good" (Trung bình) → q = 3: Trả lời đúng nhưng tốn thời gian suy nghĩ
+    // "easy" (Dễ) → q = 5: Trả lời đúng hoàn hảo và nhanh chóng
+    const qMap = { hard: 1, good: 3, easy: 5 };
+    const q = qMap[rating];
+
+    // --- Bước 2: Tính Interval và Repetitions ---
+    if (q < 3) {
+      // Mức "Khó" (q = 1): Reset hoàn toàn, ôn lại từ đầu
       repetition = 0;
-      interval = 1; // Ôn tập lại vào ngày mai
-      easeFactor = Math.max(1.3, easeFactor - 0.2);
-    } else if (rating === 'good') {
+      interval = 1; // Ôn lại vào ngày mai
+    } else {
+      // Mức "Trung bình" (q = 3) hoặc "Dễ" (q = 5): Trả lời đúng
+      if (repetition === 0) {
+        // Lần đầu trả lời đúng → ôn lại sau 1 ngày
+        interval = 1;
+      } else if (repetition === 1) {
+        // Lần thứ 2 liên tiếp trả lời đúng → ôn lại sau 6 ngày
+        interval = 6;
+      } else {
+        // Từ lần thứ 3 trở đi → nhân interval cũ với Hệ số dễ (EF)
+        interval = Math.round(interval * easeFactor);
+      }
+      // Tăng số lần trả lời đúng liên tiếp
       repetition += 1;
-      if (repetition === 1) interval = 1;
-      else if (repetition === 2) interval = 3;
-      else interval = Math.round(interval * easeFactor);
-    } else if (rating === 'easy') {
-      repetition += 1;
-      if (repetition === 1) interval = 3;
-      else if (repetition === 2) interval = 7;
-      else interval = Math.round(interval * easeFactor * 1.2);
-      easeFactor = Math.min(3.0, easeFactor + 0.15);
     }
+
+    // --- Bước 3: Cập nhật Hệ số dễ (Easiness Factor) theo công thức SM-2 gốc ---
+    // Công thức: EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    // Ví dụ: q=5 → EF tăng +0.1 | q=3 → EF giảm -0.14 | q=1 → EF giảm -0.54
+    // Bảo vệ: EF không bao giờ thấp hơn 1.3 để tránh khoảng cách lặp quá dày
+    easeFactor = easeFactor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    if (easeFactor < 1.3) easeFactor = 1.3;
+
 
     const nextReviewDate = new Date();
     nextReviewDate.setDate(nextReviewDate.getDate() + interval);

@@ -265,8 +265,10 @@ export default function StudyMode() {
               className="p-4 rounded-xl text-sm text-gray-600 mb-6"
               style={{ background: "rgba(75,0,130,0.05)" }}
             >
-              Hệ thống Spaced Repetition sẽ lên lịch ôn tập thẻ "Khó" sau <strong>1 ngày</strong>, thẻ
-              "Ổn" sau <strong>3 ngày</strong>, thẻ "Dễ" sau <strong>7 ngày</strong>.
+              Thuật toán SM-2: Bấm <strong>"Khó"</strong> (chưa nhớ) → ôn lại sau <strong>1 ngày</strong>.
+              Bấm <strong>"Ổn"</strong> hoặc <strong>"Dễ"</strong> (đã nhớ) → lần đầu ôn sau <strong>1 ngày</strong>,
+              lần 2 sau <strong>6 ngày</strong>, sau đó khoảng cách tăng dần.
+              Bấm <strong>"Dễ"</strong> nhiều lần giúp khoảng cách ôn xa hơn, bấm <strong>"Ổn"</strong> giữ khoảng cách vừa phải.
             </div>
 
             <button

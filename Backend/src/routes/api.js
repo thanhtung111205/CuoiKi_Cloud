@@ -46,6 +46,7 @@ router.get("/health", (req, res) => {
 });
 
 const flashcardController = require("../controllers/flashcardController");
+const battleController = require("../controllers/battleController");
 
 // -----------------------------------------------
 // DECK ROUTES
@@ -66,5 +67,10 @@ router.put("/flashcards/:id", authMiddleware, flashcardController.updateFlashcar
 router.delete("/flashcards/:id", authMiddleware, flashcardController.deleteFlashcard);
 router.post("/flashcards/:id/review", authMiddleware, flashcardController.reviewFlashcard);
 
-module.exports = router;
+// -----------------------------------------------
+// BATTLE ROUTES
+// -----------------------------------------------
+router.post("/battle/submit-answer", authMiddleware, battleController.submitAnswer);
+router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 
+module.exports = router;
