@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 
 function MainApp() {
   const { user, loading } = useAuth();
@@ -103,6 +104,7 @@ export default function App() {
   return (
     <AuthProvider>
       <MainApp />
+      <Toaster position="top-right" richColors />
     </AuthProvider>
   );
 }

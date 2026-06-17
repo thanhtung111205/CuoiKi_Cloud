@@ -9,6 +9,9 @@
 // --- 1. Nạp biến môi trường từ file .env ---
 require("dotenv").config();
 
+// --- Khởi tạo Firebase Admin SDK toàn cục ---
+require("./firebase");
+
 // --- 2. Import thư viện ---
 const express = require("express");
 const http = require("http");

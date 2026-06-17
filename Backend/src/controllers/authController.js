@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 // Đảm bảo lấy đúng đối tượng admin trong mọi trường hợp import CJS/ESM của phiên bản v14
 const firebaseAdmin = admin.initializeApp ? admin : (admin.default || admin);
-const apps = firebaseAdmin.apps || [];
+const apps = (firebaseAdmin.getApps ? firebaseAdmin.getApps() : firebaseAdmin.apps) || [];
 
 // Khởi tạo Firebase Admin SDK
 if (apps.length === 0) {
@@ -17,10 +17,13 @@ if (apps.length === 0) {
     if (serviceAccountPath) {
       // Nếu cấu hình file Service Account JSON
       const serviceAccount = require(serviceAccountPath);
-      firebaseAdmin.initializeApp({
-        credential: firebaseAdmin.credential.cert(serviceAccount),
-      });
-      console.log("[Firebase Admin] Khởi tạo thành công với Service Account.");
+      const certFn = firebaseAdmin.cert || (firebaseAdmin.credential && firebaseAdmin.credential.cert);
+      if (certFn) {
+        firebaseAdmin.initializeApp({
+          credential: certFn(serviceAccount),
+        });
+        console.log("[Firebase Admin] Khởi tạo thành công với Service Account.");
+      }
     } else if (projectId) {
       // Khởi tạo chỉ với Project ID (đủ để verify ID Token từ Firebase Public Keys)
       firebaseAdmin.initializeApp({

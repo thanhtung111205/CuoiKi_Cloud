@@ -7,7 +7,8 @@ const prisma = new PrismaClient();
 
 // Kiểm tra và khởi tạo Firebase Admin SDK an toàn tuyệt đối
 try {
-  if (!admin.apps || admin.apps.length === 0) {
+  const existingApps = (admin.getApps ? admin.getApps() : admin.apps) || [];
+  if (existingApps.length === 0) {
     admin.initializeApp({
       projectId: process.env.FIREBASE_PROJECT_ID || "flashcard-cloud-g12-91bee",
     });

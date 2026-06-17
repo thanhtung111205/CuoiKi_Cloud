@@ -12,9 +12,9 @@ exports.createFlashcard = async (req, res) => {
     const userId = req.user.userId;
 
     if (!deckId || !front_text || !back_text) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Thiếu thông tin bắt buộc: deckId, front_text hoặc back_text." 
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc: deckId, front_text hoặc back_text."
       });
     }
 
@@ -107,7 +107,7 @@ exports.updateFlashcard = async (req, res) => {
     const { front_text, back_text, image_url, audio_url } = req.body;
     const userId = req.user.userId;
 
-    const existingCard = await prisma.flashcard.findUnique({ 
+    const existingCard = await prisma.flashcard.findUnique({
       where: { id },
       include: { deck: true }
     });
@@ -147,7 +147,7 @@ exports.deleteFlashcard = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.userId;
 
-    const existingCard = await prisma.flashcard.findUnique({ 
+    const existingCard = await prisma.flashcard.findUnique({
       where: { id },
       include: { deck: true }
     });
