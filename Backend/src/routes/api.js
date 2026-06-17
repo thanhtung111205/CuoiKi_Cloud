@@ -66,5 +66,13 @@ router.put("/flashcards/:id", authMiddleware, flashcardController.updateFlashcar
 router.delete("/flashcards/:id", authMiddleware, flashcardController.deleteFlashcard);
 router.post("/flashcards/:id/review", authMiddleware, flashcardController.reviewFlashcard);
 
+// -----------------------------------------------
+// USER PROFILE ROUTES
+// -----------------------------------------------
+const profileController = require("../controllers/profileController");
+
+router.get("/user/profile", authMiddleware, profileController.getProfile);
+router.put("/user/profile", authMiddleware, profileController.updateProfile);
+
 module.exports = router;
 
