@@ -11,6 +11,7 @@ const deckController = require("../controllers/deckController");
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const profileController = require("../controllers/profileController");
+const notificationController = require("../controllers/notificationController");
 
 // -----------------------------------------------
 // AUTH ROUTES
@@ -74,6 +75,8 @@ router.post("/flashcards/:id/review", authMiddleware, flashcardController.review
 router.post("/battle/submit-answer", authMiddleware, battleController.submitAnswer);
 router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
+router.post("/battle/notify-join", authMiddleware, battleController.notifyJoin);
+router.post("/battle/notify-opponent-joined", authMiddleware, battleController.notifyOpponentJoined);
 router.get("/battle/history", authMiddleware, battleController.getHistory);
 
 // -----------------------------------------------
@@ -81,5 +84,12 @@ router.get("/battle/history", authMiddleware, battleController.getHistory);
 // -----------------------------------------------
 router.get("/user/profile", authMiddleware, profileController.getProfile);
 router.put("/user/profile", authMiddleware, profileController.updateProfile);
+router.post("/user/fcm-token", authMiddleware, profileController.updateFcmToken);
+router.post("/users/fcm-token", authMiddleware, profileController.updateFcmToken);
+
+// -----------------------------------------------
+// NOTIFICATION ROUTES
+// -----------------------------------------------
+router.post("/notifications/check-spaced-repetition", notificationController.checkSpacedRepetition);
 
 module.exports = router;

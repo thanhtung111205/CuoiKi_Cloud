@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const prisma = require("../db");
 
 // Đảm bảo Firebase Admin SDK được khởi tạo an toàn
@@ -420,4 +421,132 @@ exports.getHistory = async (req, res) => {
     return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
   }
 };
+
+/**
+ * POST /api/battle/notify-join
+ * Gửi thông báo đẩy FCM tới Host khi có Guest tham gia phòng
+ */
+exports.notifyJoin = async (req, res) => {
+  try {
+    const { pin, guestName } = req.body;
+    if (!pin) {
+      return res.status(400).json({ success: false, message: "Thiếu mã PIN phòng đấu." });
+    }
+
+    const roomRef = db.collection("battles").doc(pin);
+    const roomDoc = await roomRef.get();
+
+    if (!roomDoc.exists) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy phòng đấu." });
+    }
+
+    const battleData = roomDoc.data();
+    const hostFCMToken = battleData.hostFCMToken;
+
+    if (!hostFCMToken) {
+      console.log(`[battleController] Host không đăng ký FCM Token, bỏ qua gửi thông báo.`);
+      return res.json({ success: true, message: "Host không cấu hình FCM Token." });
+    }
+
+    const message = {
+      token: hostFCMToken,
+      notification: {
+        title: "Đấu trường 1v1",
+        body: `${guestName || "Đối thủ"} đã vào phòng. Trận đấu bắt đầu!`,
+      },
+      webpush: {
+        notification: {
+          icon: "/favicon.svg",
+          badge: "/favicon.svg",
+        },
+        fcmOptions: {
+          link: `/battle?pin=${pin}`
+        }
+      }
+    };
+
+    try {
+      await getMessaging().send(message);
+      console.log(`[battleController] Đã gửi thông báo FCM thành công tới Host cho phòng #${pin}`);
+      return res.json({ success: true, message: "Đã gửi thông báo FCM cho Host thành công." });
+    } catch (fcmErr) {
+      console.error("[battleController] Lỗi gọi FCM Admin SDK:", fcmErr);
+      return res.json({ success: true, warning: "Không thể gửi thông báo FCM.", error: fcmErr.message });
+    }
+  } catch (error) {
+    console.error("[battleController] Lỗi xử lý notifyJoin:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
+  }
+};
+
+/**
+ * POST /api/battle/notify-opponent-joined
+ * Lấy hostId của phòng đấu từ Firestore, tra cứu fcmToken của Host trong PostgreSQL,
+ * và gửi thông báo đẩy gọi Host quay lại.
+ */
+exports.notifyOpponentJoined = async (req, res) => {
+  try {
+    const { pin, guestName } = req.body;
+    if (!pin) {
+      return res.status(400).json({ success: false, message: "Thiếu mã PIN phòng đấu." });
+    }
+
+    // 1. Tìm thông tin phòng từ Firestore
+    const roomRef = db.collection("battles").doc(pin);
+    const roomDoc = await roomRef.get();
+
+    if (!roomDoc.exists) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy phòng đấu." });
+    }
+
+    const battleData = roomDoc.data();
+    const hostId = battleData.hostId;
+
+    if (!hostId) {
+      return res.status(400).json({ success: false, message: "Phòng đấu thiếu thông tin Host." });
+    }
+
+    // 2. Tra cứu fcmToken của Host trong PostgreSQL
+    const hostUser = await prisma.user.findUnique({
+      where: { id: hostId },
+      select: { fcmToken: true }
+    });
+
+    if (!hostUser || !hostUser.fcmToken) {
+      console.log(`[battleController] Host (${hostId}) không đăng ký FCM Token trong DB, bỏ qua.`);
+      return res.json({ success: true, message: "Host không cấu hình FCM Token." });
+    }
+
+    const message = {
+      token: hostUser.fcmToken,
+      notification: {
+        title: "Đấu trường 1v1",
+        body: `Đã tìm thấy đối thủ! ${guestName || "Đối thủ"} đã vào phòng. Trận đấu bắt đầu!`,
+      },
+      webpush: {
+        notification: {
+          icon: "/favicon.svg",
+          badge: "/favicon.svg",
+        },
+        fcmOptions: {
+          link: `/battle?pin=${pin}`
+        }
+      }
+    };
+
+    try {
+      await getMessaging().send(message);
+      console.log(`[battleController] Đã gửi thông báo ghép trận FCM tới Host (${hostId}) thành công cho phòng #${pin}`);
+      return res.json({ success: true, message: "Đã gửi thông báo FCM cho Host thành công." });
+    } catch (fcmErr) {
+      console.error("[battleController] Lỗi gửi FCM tới Host:", fcmErr);
+      return res.json({ success: true, warning: "Không thể gửi thông báo FCM.", error: fcmErr.message });
+    }
+  } catch (error) {
+    console.error("[battleController] Lỗi xử lý notifyOpponentJoined:", error);
+    return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
+  }
+};
+
+
 

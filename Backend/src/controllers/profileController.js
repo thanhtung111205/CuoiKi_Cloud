@@ -132,3 +132,34 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/user/fcm-token
+ * Cập nhật FCM token cho user hiện tại vào PostgreSQL
+ */
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Thiếu FCM Token." });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { fcmToken: token }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật FCM Token thành công."
+    });
+  } catch (error) {
+    console.error("[Profile] Lỗi updateFcmToken:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi hệ thống khi lưu FCM Token."
+    });
+  }
+};
