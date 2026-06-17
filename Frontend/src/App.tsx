@@ -6,6 +6,7 @@ import CreateDeck from "@/pages/CreateDeck";
 import StudyMode from "@/pages/StudyMode";
 import StudyLibrary from "@/pages/StudyLibrary";
 import BattleArena from "@/pages/BattleArena";
+import Profile from "@/pages/Profile";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -92,6 +93,17 @@ function MainApp() {
               </div>
             }
           />
+          <Route
+            path="/profile"
+            element={
+              <div className="flex min-h-screen" style={{ background: "#f8f6fc" }}>
+                <Sidebar />
+                <main className="flex-1 overflow-y-auto">
+                  <Profile />
+                </main>
+              </div>
+            }
+          />
         </>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -108,4 +120,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-

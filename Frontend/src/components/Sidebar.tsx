@@ -1,14 +1,15 @@
-import { BookOpen, LayoutDashboard, Plus, Swords, Flame, LogOut } from "lucide-react";
+import { BookOpen, LayoutDashboard, Plus, Swords, Flame, LogOut, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 
-type View = "dashboard" | "create" | "study" | "battle";
+type View = "dashboard" | "create" | "study" | "battle" | "profile";
 
 const navItems = [
   { id: "dashboard" as View, label: "Dashboard", icon: LayoutDashboard },
   { id: "create" as View, label: "Tạo bộ bài", icon: Plus },
   { id: "study" as View, label: "Học từ vựng", icon: BookOpen },
   { id: "battle" as View, label: "Battle Arena", icon: Swords },
+  { id: "profile" as View, label: "Hồ sơ cá nhân", icon: User },
 ];
 
 export default function Sidebar() {

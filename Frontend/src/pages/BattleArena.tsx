@@ -697,8 +697,8 @@ export default function BattleArena() {
             <Swords className="w-10 h-10 text-white" />
           </div>
 
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2 uppercase">Quiz Battle 1v1</h1>
-          <p className="text-gray-600 mb-8 max-w-md mx-auto text-sm font-semibold">
+          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2 uppercase text-center">Quiz Battle 1v1</h1>
+          <p className="text-gray-600 mb-8 max-w-md mx-auto text-sm font-semibold text-center">
             Võ đài ánh sáng kim loại (Light Radiant Arena). Tạo phòng đấu máu HP hoặc nhập mã PIN thách đấu ngay lập tức!
           </p>
 
@@ -754,7 +754,7 @@ export default function BattleArena() {
                 <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center mx-auto mb-3 border border-orange-100">
                   <Key className="w-6 h-6 text-orange-600" />
                 </div>
-                <h3 className="font-extrabold text-gray-800 text-lg mb-1 uppercase">Nhập PIN Đấu</h3>
+                <h3 className="font-extrabold text-gray-800 text-lg mb-1 uppercase text-center">Nhập PIN Đấu</h3>
                 
                 <input
                   type="text"
