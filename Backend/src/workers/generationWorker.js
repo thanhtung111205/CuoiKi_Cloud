@@ -39,11 +39,19 @@ function startWorker() {
 
       // 0. Kiểm tra Deck có tồn tại trong DB của ta không trước khi chạy các API AI tốn kém
       const deck = await prisma.deck.findUnique({
-        where: { id: deckId }
+        where: { id: deckId },
+        include: { flashcards: true }
       });
 
       if (!deck) {
         console.warn(`[Worker] ⚠️ Không tìm thấy Deck ID: ${deckId} trong database. Tự động ACK để xóa tin nhắn rác khỏi hàng đợi.`);
+        message.ack();
+        return;
+      }
+
+      // Kiểm thử Idempotency: Tránh xử lý trùng lặp khi Pub/Sub gửi lại tin nhắn do quá hạn ack deadline (timeout)
+      if (deck.status === "ready" || deck.flashcards.length > 0) {
+        console.log(`[Worker] 🎯 Deck ID: ${deckId} đã được xử lý hoàn tất trước đó (Status: ${deck.status}, Flashcards: ${deck.flashcards.length}). Tự động ACK để xóa tin nhắn lặp.`);
         message.ack();
         return;
       }

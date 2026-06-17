@@ -3,6 +3,9 @@ const { TranslationServiceClient } = require('@google-cloud/translate').v3;
 const { google } = require('googleapis');
 const { uploadAudio } = require('./r2Service');
 
+// Khởi tạo Google Custom Search API Client
+const customsearch = google.customsearch('v1');
+
 // 1. Khởi tạo Google Translate Client
 // Hệ thống chạy trên Cloud Run/Cloud Function sẽ tự bốc credentials từ Service Account
 const translationClient = new TranslationServiceClient();
@@ -14,7 +17,7 @@ const translationClient = new TranslationServiceClient();
  */
 exports.translateText = async (textToTranslate) => {
   try {
-    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12'; 
+    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12';
     const location = 'global';
 
     const request = {
@@ -43,7 +46,7 @@ exports.translateText = async (textToTranslate) => {
 exports.translateTextBatch = async (wordsArray) => {
   if (!wordsArray || wordsArray.length === 0) return [];
   try {
-    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12'; 
+    const projectId = process.env.GCP_PROJECT_ID || 'flashcard-cloud-g12';
     const location = 'global';
 
     const request = {
@@ -67,14 +70,60 @@ exports.translateTextBatch = async (wordsArray) => {
 
 /**
  * Hàm 2: Lấy link ảnh minh họa cho từ vựng
- * (Để bảo toàn 100% gói hạn mức Google Custom Search và tránh ảnh hưởng budget GCP, 
- * chúng ta sử dụng dịch vụ ảnh công cộng loremflickr khớp theo từ khóa)
+ * (Sử dụng API của Wikimedia Commons - miễn phí, không chặn ở Việt Nam và có độ chính xác cao.
+ * Có cơ chế fallback về picsum.photos nếu không tìm thấy kết quả hoặc bị lỗi).
  * @param {string} keyword - Từ vựng cần tìm ảnh
  * @returns {Promise<string>} - URL hình ảnh trực tuyến
  */
 exports.searchImage = async (keyword) => {
-  // Trả về trực tiếp URL ảnh khớp từ khóa, tốc độ tải cực nhanh và 100% miễn phí
-  return `https://loremflickr.com/320/240/${encodeURIComponent(keyword)}`;
+  try {
+    const key = process.env.GOOGLE_SEARCH_API_KEY;
+    const cx = process.env.GOOGLE_SEARCH_CX;
+
+    if (key && cx) {
+      console.log(`[AI Service] 🔍 Đang gọi Google Custom Search API cho "${keyword}"...`);
+      const res = await customsearch.cse.list({
+        cx: cx,
+        key: key,
+        q: keyword,
+        searchType: 'image',
+        num: 1
+      });
+
+      if (res.data.items && res.data.items.length > 0 && res.data.items[0].link) {
+        const imageUrl = res.data.items[0].link;
+        console.log(`[AI Service] 📸 Sinh ảnh (Google Search) cho "${keyword}": ${imageUrl}`);
+        return imageUrl;
+      }
+    }
+  } catch (err) {
+    console.error(`[AI Service] ⚠️ Lỗi Google Custom Search API cho "${keyword}":`, err.message);
+  }
+
+  // Fallback sang Wikimedia Commons nếu lỗi hoặc hết quota
+  try {
+    console.log(`[AI Service] 🔄 Đang dùng Fallback Wikimedia Commons cho "${keyword}"...`);
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(keyword)}&gsrnamespace=6&gsrlimit=1&prop=imageinfo&iiprop=url&format=json&origin=*`;
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (data.query && data.query.pages) {
+      const pages = data.query.pages;
+      const firstPageId = Object.keys(pages)[0];
+      const imageInfo = pages[firstPageId].imageinfo;
+      if (imageInfo && imageInfo[0] && imageInfo[0].url) {
+        console.log(`[AI Service] 📸 Sinh ảnh (Wikimedia Fallback) cho "${keyword}": ${imageInfo[0].url}`);
+        return imageInfo[0].url;
+      }
+    }
+  } catch (wikiErr) {
+    console.error(`[AI Service] ⚠️ Lỗi fallback Wikimedia cho "${keyword}":`, wikiErr.message);
+  }
+
+  // Fallback cuối cùng về picsum.photos
+  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(keyword)}/320/240`;
+  console.log(`[AI Service] 📸 Sinh ảnh (Fallback Picsum) cho "${keyword}": ${fallbackUrl}`);
+  return fallbackUrl;
 };
 
 // ====================================================
@@ -136,12 +185,12 @@ exports.generateAudio = async (word) => {
     };
 
     const [response] = await ttsClient.synthesizeSpeech(request);
-    
+
     // Sinh tên file duy nhất và upload lên Cloudflare R2
     const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const filename = `${Date.now()}_${cleanWord}.mp3`;
     const audioUrl = await uploadAudio(filename, response.audioContent);
-    
+
     console.log(`[AI Service] 🔊 TTS: "${word}" → R2 URL: ${audioUrl}`);
     return audioUrl;
   } catch (error) {

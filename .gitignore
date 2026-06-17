@@ -21,6 +21,7 @@ out/
 
 # Google Cloud service account key
 Backend/google-key.json
+Backend/firebase-db-key.json
 
 # Logs
 npm-debug.log*
