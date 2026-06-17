@@ -10,6 +10,7 @@ const router = express.Router();
 const deckController = require("../controllers/deckController");
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const profileController = require("../controllers/profileController");
 
 // -----------------------------------------------
 // AUTH ROUTES
@@ -74,5 +75,11 @@ router.post("/battle/submit-answer", authMiddleware, battleController.submitAnsw
 router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
 router.get("/battle/history", authMiddleware, battleController.getHistory);
+
+// -----------------------------------------------
+// USER PROFILE ROUTES
+// -----------------------------------------------
+router.get("/user/profile", authMiddleware, profileController.getProfile);
+router.put("/user/profile", authMiddleware, profileController.updateProfile);
 
 module.exports = router;
