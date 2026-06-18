@@ -23,6 +23,7 @@
     "@google-cloud/translate": "^9.4.2",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
+    "axios": "^1.7.9",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
     "firebase-admin": "^14.0.0",
