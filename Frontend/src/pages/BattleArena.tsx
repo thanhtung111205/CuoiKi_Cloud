@@ -26,6 +26,7 @@ export default function BattleArena() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [historySaved, setHistorySaved] = useState(false);
+  const [cheatingReported, setCheatingReported] = useState(false);
 
   // Decks selection state
   const [decks, setDecks] = useState<any[]>([]);
@@ -507,6 +508,56 @@ export default function BattleArena() {
     }
   }, [battleData?.status, pin, historySaved, token]);
 
+  // 7d. Tự động báo cáo gian lận (chuyển tab) khi đang thi đấu
+  useEffect(() => {
+    if (!battleData || battleData.status !== "playing" || cheatingReported || !token) return;
+
+    const reportCheating = async (reasonText: string) => {
+      try {
+        setCheatingReported(true); // Đánh dấu đã báo cáo để tránh spam
+        console.warn(`[BattleArena] 🚨 Phát hiện hành vi rời màn hình thi đấu! Lý do: ${reasonText}`);
+        
+        const response = await fetch(`${API_URL}/api/battle/report-cheating`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ reason: reasonText })
+        });
+        
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          console.log("[BattleArena] Đã gửi cảnh báo gian lận lên HubSpot thành công! ID Ticket:", resData.ticketId);
+        } else {
+          console.warn("[BattleArena] Gửi báo cáo gian lận thất bại:", resData.message);
+        }
+      } catch (err) {
+        console.error("[BattleArena] Lỗi gọi API báo cáo gian lận:", err);
+      }
+    };
+
+    // Tự động phát hiện khi chuyển tab hoặc ẩn cửa sổ
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        reportCheating("Học viên chuyển sang tab khác trong quá trình Quiz Battle");
+      }
+    };
+
+    // Tự động phát hiện khi người dùng rời tiêu điểm khỏi cửa sổ bài thi (ví dụ mở app khác đè lên)
+    const handleBlur = () => {
+      reportCheating("Học viên click ra ngoài hoặc chuyển hướng tiêu điểm khỏi màn hình thi đấu Quiz Battle");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [battleData?.status, cheatingReported, token]);
+
   // 8. Game play logic loop (synchronizing questions)
   useEffect(() => {
     if (!battleData || battleData.status !== "playing") return;
@@ -638,6 +689,7 @@ export default function BattleArena() {
     setSelectedAnswer(null);
     setEmailSent(false);
     setHistorySaved(false);
+    setCheatingReported(false);
   };
 
   // Neon custom styles for A, B, C, D buttons

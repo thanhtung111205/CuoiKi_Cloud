@@ -9,12 +9,36 @@ const pubsub = new PubSub({
 
 const prisma = new PrismaClient();
 
-const subscriptionName = "flashcard-generation-tasks-sub";
+const subscriptionName = process.env.PUBSUB_SUBSCRIPTION_NAME || "flashcard-generation-tasks-sub";
 
-function startWorker() {
+async function startWorker() {
+  const topicName = process.env.PUBSUB_TOPIC_NAME || 'flashcard-generation-tasks';
+  
+  try {
+    // Tự động kiểm tra và tạo topic nếu chưa tồn tại
+    const topic = pubsub.topic(topicName);
+    const [topicExists] = await topic.exists();
+    if (!topicExists) {
+      console.log(`[Worker] ⚠️ Topic "${topicName}" không tồn tại, đang tiến hành tạo mới...`);
+      await pubsub.createTopic(topicName);
+      console.log(`[Worker] ✅ Đã tạo mới Topic "${topicName}" thành công.`);
+    }
+    
+    // Tự động kiểm tra và tạo subscription nếu chưa tồn tại
+    const subscription = pubsub.subscription(subscriptionName);
+    const [subExists] = await subscription.exists();
+    if (!subExists) {
+      console.log(`[Worker] ⚠️ Subscription "${subscriptionName}" không tồn tại, đang tiến hành tạo mới cho Topic "${topicName}"...`);
+      await pubsub.createSubscription(topicName, subscriptionName);
+      console.log(`[Worker] ✅ Đã tạo mới Subscription "${subscriptionName}" thành công.`);
+    }
+  } catch (err) {
+    console.error(`[Worker] ❌ Lỗi khi tự động kiểm tra/khởi tạo Topic hoặc Subscription:`, err.message);
+  }
+
   const subscription = pubsub.subscription(subscriptionName);
 
-  console.log(`[Worker] 🎧 Đang lắng nghe các task sinh thẻ từ Pub/Sub...`);
+  console.log(`[Worker] 🎧 Đang lắng nghe các task sinh thẻ từ Pub/Sub: ${subscriptionName}`);
 
   subscription.on("message", async (message) => {
     console.log(`[Worker] 📩 Nhận được 1 Task mới! ID: ${message.id}`);

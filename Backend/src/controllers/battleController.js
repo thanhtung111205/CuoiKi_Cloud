@@ -548,5 +548,92 @@ exports.notifyOpponentJoined = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/battle/report-cheating
+ * Tự động tạo Ticket cảnh báo gian lận (chuyển tab) lên HubSpot CRM
+ */
+exports.reportCheating = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const email = req.user.email;
+    const { reason } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Người dùng chưa được xác thực." });
+    }
+
+    console.log(`[battleController] 🚨 Nhận cảnh báo gian lận cho user: ${userId} (${email || "N/A"}). Lý do: ${reason || "N/A"}`);
+
+    // 1. Truy vấn tên đầy đủ của học sinh từ DB để điền vào ticket chi tiết hơn
+    let fullName = "Học sinh ẩn danh";
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { fullName: true }
+      });
+      if (dbUser && dbUser.fullName) {
+        fullName = dbUser.fullName;
+      }
+    } catch (dbErr) {
+      console.error("[battleController] Lỗi lấy thông tin user để báo cáo HubSpot:", dbErr.message);
+    }
+
+    const hubspotToken = process.env.HUBSPOT_ACCESS_TOKEN;
+    if (!hubspotToken) {
+      console.warn("[HubSpot SDK] Chưa cấu hình HUBSPOT_ACCESS_TOKEN trong file .env. Bỏ qua gửi Ticket.");
+      return res.status(500).json({
+        success: false,
+        message: "Chưa cấu hình HubSpot Access Token trên máy chủ."
+      });
+    }
+
+    // 2. Gửi request POST lên HubSpot Tickets API qua REST Client (Node fetch)
+    const hubspotUrl = "https://api.hubapi.com/crm/v3/objects/tickets";
+    const payload = {
+      properties: {
+        subject: "Cảnh báo gian lận: Chuyển tab khi thi đấu Quiz Battle",
+        content: `Chi tiết cảnh báo:\n-------------------------------\n- ID Học viên: ${userId}\n- Email: ${email || "Không có"}\n- Tên học viên: ${fullName}\n- Hành vi phát hiện: ${reason || "Chuyển tab / Rời màn hình thi đấu Quiz Battle"}\n-------------------------------`,
+        hs_ticket_priority: "HIGH",
+        hs_pipeline: "0",
+        hs_pipeline_stage: "1"
+      }
+    };
+
+    const response = await fetch(hubspotUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${hubspotToken}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const resData = await response.json();
+
+    if (response.ok) {
+      console.log(`[HubSpot CRM] ✅ Tạo Ticket cảnh báo gian lận thành công cho học viên ${fullName} (Ticket ID: ${resData.id || "N/A"})`);
+      return res.status(201).json({
+        success: true,
+        message: "Đã báo cáo hành vi gian lận và tạo Ticket trên HubSpot thành công.",
+        ticketId: resData.id
+      });
+    } else {
+      console.error("[HubSpot CRM] ❌ Lỗi phản hồi từ HubSpot API:", resData);
+      return res.status(response.status).json({
+        success: false,
+        message: resData.message || "Lỗi khi tạo Ticket trên HubSpot.",
+        error: resData
+      });
+    }
+  } catch (error) {
+    console.error("[battleController] ❌ Lỗi nghiêm trọng khi tạo Ticket HubSpot:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi Server Internal trong quá trình kết nối HubSpot.",
+      error: error.message
+    });
+  }
+};
+
 
 
