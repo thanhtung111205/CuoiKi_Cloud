@@ -45,6 +45,17 @@ export default function Dashboard() {
       const tokenResult = await requestForToken();
       if (tokenResult) {
         setNotificationPermission("granted");
+
+        // Gửi FCM Token lên Backend để lưu vào PostgreSQL
+        try {
+          const authToken = token || localStorage.getItem("token");
+          await axios.post(`${baseUrl}/api/users/fcm-token`, { token: tokenResult }, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+        } catch (apiErr) {
+          console.error("Lỗi gửi FCM Token lên server:", apiErr);
+        }
+
         toast.success("Đã bật thông báo thành công!", {
           description: "Giờ đây bạn có thể nhận thông báo học tập & thách đấu thời gian thực.",
         });
@@ -127,6 +138,25 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDecks();
     fetchMatchHistory();
+
+    // Tự động kiểm tra và cập nhật FCM Token nếu đã được cấp quyền trước đó
+    if (Notification.permission === "granted") {
+      const autoSaveFcmToken = async () => {
+        try {
+          const tokenResult = await requestForToken();
+          if (tokenResult) {
+            const authToken = token || localStorage.getItem("token");
+            await axios.post(`${baseUrl}/api/users/fcm-token`, { token: tokenResult }, {
+              headers: { Authorization: `Bearer ${authToken}` }
+            });
+            console.log("[Dashboard] Tự động cập nhật FCM Token thành công.");
+          }
+        } catch (err) {
+          console.error("[Dashboard] Lỗi tự động cập nhật FCM Token:", err);
+        }
+      };
+      autoSaveFcmToken();
+    }
   }, [token]);
 
   // Chào buổi

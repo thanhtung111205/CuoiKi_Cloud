@@ -19,6 +19,7 @@ model User {
   currentStreak   Int             @default(0) @map("current_streak")
   longestStreak   Int             @default(0) @map("longest_streak")
   lastActiveDate  DateTime?       @map("last_active_date")
+  fcmToken        String?         @map("fcm_token")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   

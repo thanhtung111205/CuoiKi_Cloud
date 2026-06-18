@@ -44,8 +44,14 @@ export const requestForToken = async (): Promise<string | null> => {
         return null;
       }
 
-      // Đăng ký Service Worker tường minh (nếu cần thiết hoặc dùng mặc định)
-      const currentToken = await getToken(messaging, { vapidKey });
+      // Đăng ký Service Worker tường minh
+      let currentToken;
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        currentToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+      } else {
+        currentToken = await getToken(messaging, { vapidKey });
+      }
       if (currentToken) {
         return currentToken;
       } else {

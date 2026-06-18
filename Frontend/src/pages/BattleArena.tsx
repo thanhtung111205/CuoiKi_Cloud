@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Swords, Trophy, Clock, User, Shield, Key, ArrowRight, Play, Loader2, LogOut, Mail, Heart } from "lucide-react";
 import { battleQuestions } from "@/data/mockData";
 import { useAuth } from "@/context/AuthContext";
-import { db } from "@/config/firebase";
+import { db, requestForToken, messaging } from "@/config/firebase";
 import { doc, setDoc, updateDoc, onSnapshot, getDoc } from "firebase/firestore";
+import { onMessage } from "firebase/messaging";
 import Turnstile from "react-turnstile";
 import axios from "axios";
 
@@ -12,7 +13,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 export default function BattleArena() {
   const { user, token } = useAuth();
-  
+
   // Game states
   const [role, setRole] = useState<"host" | "guest" | null>(null);
   const [pin, setPin] = useState("");
@@ -25,6 +26,7 @@ export default function BattleArena() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [historySaved, setHistorySaved] = useState(false);
+  const [cheatingReported, setCheatingReported] = useState(false);
 
   // Decks selection state
   const [decks, setDecks] = useState<any[]>([]);
@@ -53,6 +55,20 @@ export default function BattleArena() {
     roleRef.current = role;
     battleDataRef.current = battleData;
   }, [pin, role, battleData]);
+
+  // Lắng nghe và hiển thị thông báo FCM ở chế độ foreground (khi trình duyệt đang hoạt động/mở tab khác)
+  useEffect(() => {
+    const unsubscribe = onMessage(messaging, (payload) => {
+      console.log("[FCM] Nhận thông báo ở foreground:", payload);
+      if (Notification.permission === "granted") {
+        new Notification(payload.notification?.title || "Đấu trường 1v1", {
+          body: payload.notification?.body,
+          icon: "/favicon.svg",
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Fetch user decks list
   useEffect(() => {
@@ -108,7 +124,7 @@ export default function BattleArena() {
 
       const generatedQuestions = activeCards.map((card, idx) => {
         const correctText = card.meaningVi;
-        
+
         // Exclude correct answer to find wrong answers
         const wrongAnswers = cardsList
           .filter((c: any) => c.id !== card.id)
@@ -116,7 +132,7 @@ export default function BattleArena() {
 
         // Take 3 unique wrong answers
         const uniqueWrongAnswers = [...new Set(wrongAnswers)].sort(() => 0.5 - Math.random()).slice(0, 3);
-        
+
         // Fallback mock wrong answers if deck has duplicated values
         while (uniqueWrongAnswers.length < 3) {
           uniqueWrongAnswers.push(`Đáp án giả lập ${uniqueWrongAnswers.length + 1}`);
@@ -136,19 +152,36 @@ export default function BattleArena() {
 
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
 
+      // Yêu cầu quyền nhận thông báo FCM và lấy Token để gửi khi đổi tab
+      let hostFCMToken: string | null = null;
+      try {
+        hostFCMToken = await requestForToken();
+        console.log("Host FCM Token:", hostFCMToken);
+        if (hostFCMToken) {
+          // Gửi Token lên PostgreSQL để lưu trữ cho Host
+          await axios.post(`${API_URL}/api/users/fcm-token`, { token: hostFCMToken }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log("Đã cập nhật FCM Token của Host vào PostgreSQL.");
+        }
+      } catch (fcmErr) {
+        console.warn("Không lấy được FCM Token cho Host:", fcmErr);
+      }
+
       const roomRef = doc(db, "battles", generatedPin);
       await setDoc(roomRef, {
         pin: generatedPin,
         hostId: user.id,
         hostName: user.fullName,
         hostEmail: user.email,
-        hostHP: 1000, 
+        hostHP: 1000,
         hostCombo: 0,
         hostSelectedAnswer: null,
+        hostFCMToken: hostFCMToken,
         guestId: null,
         guestName: null,
         guestEmail: null,
-        guestHP: 1000, 
+        guestHP: 1000,
         guestCombo: 0,
         guestSelectedAnswer: null,
         status: "waiting",
@@ -174,7 +207,7 @@ export default function BattleArena() {
   const handleGuestJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !pin) return;
-    
+
     if (!turnstileToken) {
       alert("Vui lòng hoàn thành CAPTCHA Turnstile để tham gia phòng đấu.");
       return;
@@ -202,9 +235,21 @@ export default function BattleArena() {
         guestId: user.id,
         guestName: user.fullName,
         guestEmail: user.email,
-        status: "waiting_for_start", 
+        status: "waiting_for_start",
         updatedAt: Date.now(),
       });
+
+      // Gửi yêu cầu FCM tới Host báo có Guest tham gia
+      try {
+        await axios.post(`${API_URL}/api/battle/notify-opponent-joined`, {
+          pin: pin,
+          guestName: user.fullName
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (fcmErr) {
+        console.warn("Lỗi gửi thông báo join cho Host qua FCM:", fcmErr);
+      }
 
       setRole("guest");
       prevHostHPRef.current = 1000;
@@ -320,8 +365,8 @@ export default function BattleArena() {
   // 6. Handle timeout for current question
   const handleQuestionTimeout = async () => {
     if (selectedAnswer !== null || role === null || !battleData) return;
-    setSelectedAnswer(-1); 
-    
+    setSelectedAnswer(-1);
+
     const currentQuestion = battleData.questions[battleData.currentQuestionIndex];
     try {
       await fetch(`${API_URL}/api/battle/submit-answer`, {
@@ -412,8 +457,8 @@ export default function BattleArena() {
       const currentRole = roleRef.current;
       const currentData = battleDataRef.current;
 
-      if (currentPin && currentRole && currentData && 
-         (currentData.status === "playing" || currentData.status === "waiting" || currentData.status === "waiting_for_start")) {
+      if (currentPin && currentRole && currentData &&
+        (currentData.status === "playing" || currentData.status === "waiting" || currentData.status === "waiting_for_start")) {
         try {
           const roomRef = doc(db, "battles", currentPin);
           await updateDoc(roomRef, {
@@ -463,6 +508,56 @@ export default function BattleArena() {
     }
   }, [battleData?.status, pin, historySaved, token]);
 
+  // 7d. Tự động báo cáo gian lận (chuyển tab) khi đang thi đấu
+  useEffect(() => {
+    if (!battleData || battleData.status !== "playing" || cheatingReported || !token) return;
+
+    const reportCheating = async (reasonText: string) => {
+      try {
+        setCheatingReported(true); // Đánh dấu đã báo cáo để tránh spam
+        console.warn(`[BattleArena] 🚨 Phát hiện hành vi rời màn hình thi đấu! Lý do: ${reasonText}`);
+        
+        const response = await fetch(`${API_URL}/api/battle/report-cheating`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ reason: reasonText })
+        });
+        
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          console.log("[BattleArena] Đã gửi cảnh báo gian lận lên HubSpot thành công! ID Ticket:", resData.ticketId);
+        } else {
+          console.warn("[BattleArena] Gửi báo cáo gian lận thất bại:", resData.message);
+        }
+      } catch (err) {
+        console.error("[BattleArena] Lỗi gọi API báo cáo gian lận:", err);
+      }
+    };
+
+    // Tự động phát hiện khi chuyển tab hoặc ẩn cửa sổ
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        reportCheating("Học viên chuyển sang tab khác trong quá trình Quiz Battle");
+      }
+    };
+
+    // Tự động phát hiện khi người dùng rời tiêu điểm khỏi cửa sổ bài thi (ví dụ mở app khác đè lên)
+    const handleBlur = () => {
+      reportCheating("Học viên click ra ngoài hoặc chuyển hướng tiêu điểm khỏi màn hình thi đấu Quiz Battle");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [battleData?.status, cheatingReported, token]);
+
   // 8. Game play logic loop (synchronizing questions)
   useEffect(() => {
     if (!battleData || battleData.status !== "playing") return;
@@ -470,6 +565,7 @@ export default function BattleArena() {
     const hostAns = battleData.hostSelectedAnswer;
     const guestAns = battleData.guestSelectedAnswer;
     const currentQuestionIndex = battleData.currentQuestionIndex;
+    const bothAnswered = hostAns !== null && guestAns !== null;
 
     // Reset các trạng thái local về mặc định khi câu hỏi mới bắt đầu (cả hai đáp án trên DB đều được reset về null)
     if (hostAns === null && guestAns === null) {
@@ -496,7 +592,7 @@ export default function BattleArena() {
 
       if (remaining <= 0) {
         clearInterval(timerRef.current!);
-        
+
         // Tự động timeout cho bản thân nếu chưa trả lời
         if (role === "host" && hostAns === null) {
           handleQuestionTimeout();
@@ -504,12 +600,12 @@ export default function BattleArena() {
           handleQuestionTimeout();
         }
 
-        // Nếu là Host: Tự động force các đối thủ chưa trả lời về -1 để tránh đơ trận đấu (kể cả khi họ offline)
-        if (role === "host" && !bothAnswered && !showAnswerFeedback) {
+        // Tự động force các đối thủ chưa trả lời về -1 để tránh đơ trận đấu (kể cả khi một bên offline/lag)
+        if (!bothAnswered && !showAnswerFeedback) {
           const roomRef = doc(db, "battles", pin);
           const updateData: any = {};
           let needsUpdate = false;
-          
+
           if (hostAns === null) {
             updateData.hostSelectedAnswer = -1;
             updateData.hostHP = Math.max(0, (battleData.hostHP || 1000) - 100);
@@ -522,16 +618,14 @@ export default function BattleArena() {
             updateData.guestDamageIndicator = "💥 -100";
             needsUpdate = true;
           }
-          
+
           if (needsUpdate) {
-            console.log("[Host] Force timeout for missing answers to prevent freeze");
+            console.log("Force timeout for missing answers to prevent freeze");
             updateDoc(roomRef, updateData).catch(e => console.error(e));
           }
         }
       }
     }, 1000);
-
-    const bothAnswered = hostAns !== null && guestAns !== null;
 
     if (bothAnswered) {
       clearTimers();
@@ -539,17 +633,19 @@ export default function BattleArena() {
 
       nextQuestionTimeoutRef.current = setTimeout(async () => {
         setShowAnswerFeedback(false);
-        
-        if (role === "host") {
-          const nextIndex = currentQuestionIndex + 1;
-          const roomRef = doc(db, "battles", pin);
-          
-          if (nextIndex >= battleData.questions.length) {
-            await updateDoc(roomRef, {
-              status: "finished",
-              updatedAt: Date.now(),
-            });
-          } else {
+
+        const nextIndex = currentQuestionIndex + 1;
+        const roomRef = doc(db, "battles", pin);
+
+        if (nextIndex >= battleData.questions.length) {
+          // Cả Host và Guest đều có quyền kết thúc trận đấu để tránh bị đơ nếu một bên bị lag/background throttling
+          await updateDoc(roomRef, {
+            status: "finished",
+            updatedAt: Date.now(),
+          });
+        } else {
+          // Chỉ Host chuyển câu hỏi tiếp theo để reset đáp án đồng bộ về null
+          if (role === "host") {
             await updateDoc(roomRef, {
               currentQuestionIndex: nextIndex,
               hostSelectedAnswer: null,
@@ -564,9 +660,9 @@ export default function BattleArena() {
 
     return () => clearTimers();
   }, [
-    battleData?.currentQuestionIndex, 
-    battleData?.hostSelectedAnswer, 
-    battleData?.guestSelectedAnswer, 
+    battleData?.currentQuestionIndex,
+    battleData?.hostSelectedAnswer,
+    battleData?.guestSelectedAnswer,
     battleData?.status,
     role,
     pin,
@@ -593,13 +689,30 @@ export default function BattleArena() {
     setSelectedAnswer(null);
     setEmailSent(false);
     setHistorySaved(false);
+    setCheatingReported(false);
   };
 
   // Neon custom styles for A, B, C, D buttons
   const getButtonFeedbackStyle = (index: number) => {
     const currentQuestion = battleData.questions[battleData.currentQuestionIndex];
 
-    if (!showAnswerFeedback) return {};
+    if (!showAnswerFeedback) {
+      if (selectedAnswer === index) {
+        return {
+          background: "linear-gradient(135deg, #6366F1, #4F46E5)",
+          border: "2px solid #6366F1",
+          color: "white",
+          boxShadow: "0 0 15px rgba(99, 102, 241, 0.6)",
+        };
+      }
+      if (selectedAnswer !== null) {
+        return {
+          opacity: 0.5,
+          filter: "grayscale(50%)",
+        };
+      }
+      return {};
+    }
 
     const isCorrectIndex = index === currentQuestion.correct;
     const isMySelection = selectedAnswer === index;
@@ -627,7 +740,7 @@ export default function BattleArena() {
 
   // Base custom shadow styles for left (A,C - Blue) vs right (B,D - Red) buttons
   const getButtonBaseNeonStyle = (index: number) => {
-    if (showAnswerFeedback) return {}; // Override on feedback
+    if (showAnswerFeedback || selectedAnswer !== null) return {}; // Override on feedback or selection
 
     const isLeftColumn = index === 0 || index === 2; // A and C
     if (isLeftColumn) {
@@ -645,17 +758,17 @@ export default function BattleArena() {
 
   // HP Color Picker helper
   const getHpColor = (hp: number) => {
-    if (hp > 500) return "linear-gradient(90deg, #10B981, #059669)"; 
-    if (hp > 200) return "linear-gradient(90deg, #F59E0B, #D97706)"; 
-    return "linear-gradient(90deg, #EF4444, #DC2626)"; 
+    if (hp > 500) return "linear-gradient(90deg, #10B981, #059669)";
+    if (hp > 200) return "linear-gradient(90deg, #F59E0B, #D97706)";
+    return "linear-gradient(90deg, #EF4444, #DC2626)";
   };
 
   // Custom Wire Grid Background for Light Radiant Arena
   const GridBackground = () => (
     <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
       {/* Wire Mesh Grid pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.08]" 
+      <div
+        className="absolute inset-0 opacity-[0.08]"
         style={{
           backgroundImage: `
             radial-gradient(circle, #64748b 1px, transparent 1px),
@@ -665,7 +778,7 @@ export default function BattleArena() {
           backgroundSize: "24px 24px, 48px 48px, 48px 48px",
         }}
       />
-      
+
       {/* Light Radiant Diagonal beams */}
       <div className="absolute -top-[30%] -left-[30%] w-[70%] h-[70%] rounded-full bg-sky-200/20 blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-[30%] -right-[30%] w-[70%] h-[70%] rounded-full bg-red-200/20 blur-[100px] pointer-events-none" />
@@ -755,7 +868,7 @@ export default function BattleArena() {
                   <Key className="w-6 h-6 text-orange-600" />
                 </div>
                 <h3 className="font-extrabold text-gray-800 text-lg mb-1 uppercase text-center">Nhập PIN Đấu</h3>
-                
+
                 <input
                   type="text"
                   maxLength={6}
@@ -892,7 +1005,7 @@ export default function BattleArena() {
     const oppHP = isHost ? (battleData.guestHP ?? 1000) : (battleData.hostHP ?? 1000);
     const oppName = isHost ? battleData.guestName : battleData.hostName;
     const myCombo = isHost ? battleData.hostCombo : battleData.guestCombo;
-    
+
     const myAnswered = isHost ? battleData.hostSelectedAnswer !== null : battleData.guestSelectedAnswer !== null;
     const oppAnswered = isHost ? battleData.guestSelectedAnswer !== null : battleData.hostSelectedAnswer !== null;
 
@@ -906,10 +1019,10 @@ export default function BattleArena() {
 
         {/* Combat Box wrapper */}
         <div className={`w-full max-w-4xl mx-auto space-y-6 relative z-10 transition-transform duration-100 ${shakeSelf ? "animate-bounce" : ""}`}>
-          
+
           {/* TOP SECTION: Players HP Steel Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            
+
             {/* Left Player: You (Steel card style with HP bar) */}
             <div className="bg-gradient-to-b from-white to-gray-200 border-2 border-gray-400 rounded-2xl p-5 relative shadow-md flex flex-col justify-between min-h-[110px]">
               {/* Corner rivets */}
@@ -925,7 +1038,7 @@ export default function BattleArena() {
                 </span>
                 <span className="text-xs font-black text-purple-900 font-mono tracking-wider">{myHP}/1000 HP</span>
               </div>
-              
+
               {/* HP Bar in a dark inner groove */}
               <div className="h-5 w-full bg-gray-900 rounded-md overflow-hidden relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] border border-gray-700 p-[2px]">
                 <div
@@ -990,7 +1103,7 @@ export default function BattleArena() {
                 </span>
                 <span className="text-xs font-black text-red-900 font-mono tracking-wider">{oppHP}/1000 HP</span>
               </div>
-              
+
               {/* Crimson/Red HP bar in dark groove */}
               <div className="h-5 w-full bg-gray-900 rounded-md overflow-hidden relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] border border-gray-700 p-[2px]">
                 <div
@@ -1049,7 +1162,7 @@ export default function BattleArena() {
                 {timeLeft}s
               </span>
             </div>
-            
+
             {/* Neon glowing progress bar */}
             <div className="h-6 w-full bg-gray-800 rounded-full overflow-hidden p-[3px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] border border-gray-700 flex items-center">
               <motion.div
@@ -1106,15 +1219,14 @@ export default function BattleArena() {
                     </span>
                     {option}
                   </span>
-                  
+
                   {/* Protruding tail button indicator (Xanh lơ cho A,C - Đỏ cho B,D) */}
-                  {!showAnswerFeedback && (
+                  {!showAnswerFeedback && selectedAnswer === null && (
                     <div
-                      className={`w-4 h-4 rounded-full border border-white ml-2 flex-shrink-0 animate-pulse ${
-                        isLeftColumn 
-                          ? "bg-sky-400 shadow-[0_0_8px_#00bfff]" 
-                          : "bg-red-500 shadow-[0_0_8px_#ff3333]"
-                      }`}
+                      className={`w-4 h-4 rounded-full border border-white ml-2 flex-shrink-0 animate-pulse ${isLeftColumn
+                        ? "bg-sky-400 shadow-[0_0_8px_#00bfff]"
+                        : "bg-red-500 shadow-[0_0_8px_#ff3333]"
+                        }`}
                     />
                   )}
                 </motion.button>
@@ -1211,7 +1323,7 @@ export default function BattleArena() {
             {draw ? "🤝 KẾT QUẢ HÒA!" : won ? "🎉 BẠN CHIẾN THẮNG!" : "😤 THUA CUỘC RỒI!"}
           </h2>
           <p className="text-gray-600 text-xs font-bold mb-6">
-            {draw 
+            {draw
               ? "Hai người có lượng HP bằng nhau sau khi trả lời hết các câu hỏi!"
               : (won ? "Bạn giành thắng lợi nhờ giữ lượng máu HP cao hơn!" : "Đối thủ thắng cuộc nhờ lượng máu HP nhỉnh hơn!")
             }
@@ -1223,9 +1335,9 @@ export default function BattleArena() {
               <p className="text-[10px] font-black text-purple-700 uppercase">BẠN</p>
               <p className="text-3xl font-black text-purple-900 mt-1 font-mono">{myHP} HP</p>
             </div>
-            
+
             <div className="text-red-500 font-extrabold text-xl animate-pulse">VS</div>
-            
+
             <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
               <p className="text-[10px] font-black text-orange-700 truncate max-w-[100px] mx-auto uppercase">{oppName}</p>
               <p className="text-3xl font-black text-orange-900 mt-1 font-mono">{oppHP} HP</p>
@@ -1243,7 +1355,7 @@ export default function BattleArena() {
                 <p className="text-[10px] text-gray-400 font-medium">Gửi kết quả phân định thắng thua, chỉ số máu còn lại qua Resend API.</p>
               </div>
             </div>
-            
+
             {emailSent ? (
               <div className="mt-3 text-center py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200">
                 ✅ Đã gửi email kết quả thành công!
