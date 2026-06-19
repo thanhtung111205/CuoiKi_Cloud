@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, BookOpen, Trophy, Target, TrendingUp, Star, Plus, Edit2, Trash2, Search, X, Loader2, AlertCircle, Bell } from "lucide-react";
+import { Flame, BookOpen, Trophy, Target, TrendingUp, Star, Plus, Edit2, Trash2, Search, X, Loader2, AlertCircle, Bell, Bug, BarChart2, RefreshCw } from "lucide-react";
 import DeckCard from "@/components/DeckCard";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +31,19 @@ export default function Dashboard() {
   const [deckTitle, setDeckTitle] = useState("");
   const [deckDescription, setDeckDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // State bug report modal
+  const [showBugModal, setShowBugModal] = useState(false);
+  const [bugIssueType, setBugIssueType] = useState("");
+  const [bugDescription, setBugDescription] = useState("");
+  const [submittingBug, setSubmittingBug] = useState(false);
+
+  // State Zoho Analytics
+  const [embedUrls, setEmbedUrls] = useState<Record<string, string | null>>({});
+  const [analyticsConfigured, setAnalyticsConfigured] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [syncingAnalytics, setSyncingAnalytics] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   // Trạng thái quyền thông báo FCM
   const [notificationPermission, setNotificationPermission] = useState<string>(
@@ -81,6 +94,70 @@ export default function Dashboard() {
   };
 
   const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
+  const handleSubmitBugReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bugIssueType || bugDescription.trim().length < 10) return;
+
+    setSubmittingBug(true);
+    try {
+      const authToken = token || localStorage.getItem("token");
+      await axios.post(
+        `${baseUrl}/api/support/bug-report`,
+        { issue_type: bugIssueType, description: bugDescription.trim() },
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      toast.success("Báo cáo đã được gửi!", {
+        description: "Cảm ơn bạn! Chúng tôi sẽ xem xét và phản hồi sớm nhất.",
+      });
+      setShowBugModal(false);
+      setBugIssueType("");
+      setBugDescription("");
+    } catch (err: any) {
+      toast.error("Không thể gửi báo cáo", {
+        description: err.response?.data?.message || "Lỗi kết nối máy chủ.",
+      });
+    } finally {
+      setSubmittingBug(false);
+    }
+  };
+
+  // Lấy embed URLs từ Zoho Analytics
+  const fetchEmbedUrls = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const authToken = token || localStorage.getItem("token");
+      const res = await axios.get(`${baseUrl}/api/analytics/embed-urls`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.data?.success) {
+        setEmbedUrls(res.data.data || {});
+        setAnalyticsConfigured(res.data.configured || false);
+      }
+    } catch (err) {
+      console.warn("[Dashboard] Zoho Analytics chưa cấu hình hoặc lỗi kết nối.");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  // Đồng bộ dữ liệu lên Zoho Analytics
+  const handleSyncAnalytics = async () => {
+    setSyncingAnalytics(true);
+    try {
+      const authToken = token || localStorage.getItem("token");
+      await axios.post(`${baseUrl}/api/analytics/sync`, {}, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setLastSyncedAt(new Date());
+      toast.success("Đồng bộ thành công!", { description: "Dữ liệu đã được cập nhật lên Zoho Analytics." });
+      fetchEmbedUrls();
+    } catch (err: any) {
+      toast.error("Không thể đồng bộ", { description: err.response?.data?.message || "Lỗi kết nối máy chủ." });
+    } finally {
+      setSyncingAnalytics(false);
+    }
+  };
 
   // Hàm gọi API lấy danh sách bộ thẻ
   const fetchDecks = async () => {
@@ -138,6 +215,7 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDecks();
     fetchMatchHistory();
+    fetchEmbedUrls();
 
     // Tự động kiểm tra và cập nhật FCM Token nếu đã được cấp quyền trước đó
     if (Notification.permission === "granted") {
@@ -311,6 +389,14 @@ export default function Dashboard() {
             <Star className="w-4 h-4" />
             Tạo bằng AI
           </button>
+          <button
+            onClick={() => setShowBugModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            <Bug className="w-4 h-4" />
+            Báo cáo lỗi
+          </button>
         </div>
       </div>
 
@@ -372,6 +458,84 @@ export default function Dashboard() {
             </motion.div>
           );
         })}
+      </div>
+
+      {/* Analytics Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <BarChart2 className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 text-base">Phân tích học tập</h2>
+              {lastSyncedAt && (
+                <p className="text-[11px] text-gray-400">
+                  Đồng bộ lúc {lastSyncedAt.toLocaleTimeString("vi-VN")}
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleSyncAnalytics}
+            disabled={syncingAnalytics}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingAnalytics ? "animate-spin" : ""}`} />
+            {syncingAnalytics ? "Đang đồng bộ..." : "Đồng bộ"}
+          </button>
+        </div>
+
+        {analyticsLoading ? (
+          <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-sm">Đang tải biểu đồ...</span>
+          </div>
+        ) : !analyticsConfigured ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center">
+              <BarChart2 className="w-7 h-7 text-gray-300" />
+            </div>
+            <p className="font-semibold text-gray-500 text-sm">Zoho Analytics chưa được cấu hình</p>
+            <p className="text-xs text-gray-400 max-w-xs">
+              Thêm các biến <code className="bg-gray-100 px-1 rounded">ZOHO_VIEW_CHART_*</code> vào file <code className="bg-gray-100 px-1 rounded">.env</code> để hiển thị biểu đồ.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[
+              { key: "chartActivity", title: "Hoạt động học theo ngày" },
+              { key: "chartMastery", title: "Mức thành thạo từ vựng" },
+              { key: "chartDecks", title: "Tiến độ từng bộ thẻ" },
+              { key: "chartBattle", title: "Tỷ lệ thắng/thua thi đấu" },
+            ].map(({ key, title }) =>
+              embedUrls[key] ? (
+                <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+                  <iframe
+                    src={embedUrls[key]!}
+                    width="100%"
+                    height="300"
+                    frameBorder="0"
+                    title={title}
+                    className="block"
+                  />
+                </div>
+              ) : null
+            )}
+            {embedUrls["chartEF"] && (
+              <div className="lg:col-span-2 rounded-xl border border-gray-100 overflow-hidden">
+                <iframe
+                  src={embedUrls["chartEF"]!}
+                  width="100%"
+                  height="300"
+                  frameBorder="0"
+                  title="Phân bố Ease Factor"
+                  className="block"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -643,6 +807,90 @@ export default function Dashboard() {
                   >
                     {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     Tạo bộ bài
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: BÁO CÁO LỖI */}
+      <AnimatePresence>
+        {showBugModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl max-w-md w-full border border-gray-100 shadow-2xl p-6 relative overflow-hidden"
+            >
+              <button
+                onClick={() => { setShowBugModal(false); setBugIssueType(""); setBugDescription(""); }}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 text-gray-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+                <Bug className="w-5 h-5 text-red-600" />
+                Báo cáo lỗi
+              </h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Mô tả lỗi bạn gặp phải. Chúng tôi sẽ xem xét và phản hồi qua HubSpot.
+              </p>
+
+              <form onSubmit={handleSubmitBugReport} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Loại lỗi</label>
+                  <select
+                    required
+                    value={bugIssueType}
+                    onChange={(e) => setBugIssueType(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="">-- Chọn loại lỗi --</option>
+                    <option value="Lỗi đăng nhập">Lỗi đăng nhập</option>
+                    <option value="Lỗi tạo bộ bài">Lỗi tạo bộ bài</option>
+                    <option value="Lỗi Battle Arena">Lỗi Battle Arena</option>
+                    <option value="Lỗi âm thanh">Lỗi âm thanh</option>
+                    <option value="Lỗi hiển thị">Lỗi hiển thị</option>
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    Mô tả chi tiết <span className="text-gray-400 font-normal normal-case">(ít nhất 10 ký tự)</span>
+                  </label>
+                  <textarea
+                    required
+                    value={bugDescription}
+                    onChange={(e) => setBugDescription(e.target.value)}
+                    placeholder="Mô tả lỗi bạn gặp phải, các bước tái hiện, thiết bị / trình duyệt..."
+                    rows={4}
+                    minLength={10}
+                    maxLength={2000}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  />
+                  <p className="text-right text-xs text-gray-400 mt-1">{bugDescription.length}/2000</p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowBugModal(false); setBugIssueType(""); setBugDescription(""); }}
+                    className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingBug || !bugIssueType || bugDescription.trim().length < 10}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+                    style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                  >
+                    {submittingBug && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Gửi báo cáo
                   </button>
                 </div>
               </form>

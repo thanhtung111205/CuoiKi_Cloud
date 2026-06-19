@@ -19,7 +19,6 @@ export default function StudyMode() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [ratings, setRatings] = useState<Record<number, "hard" | "good" | "easy">>({});
   const [finished, setFinished] = useState(false);
-
   const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
   useEffect(() => {
@@ -271,14 +270,16 @@ export default function StudyMode() {
               Bấm <strong>"Dễ"</strong> nhiều lần giúp khoảng cách ôn xa hơn, bấm <strong>"Ổn"</strong> giữ khoảng cách vừa phải.
             </div>
 
-            <button
-              onClick={handleRestart}
-              className="flex items-center gap-2 mx-auto px-6 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 hover:shadow-lg"
-              style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
-            >
-              <RotateCcw className="w-4 h-4" />
-              Học lại từ đầu
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={handleRestart}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 hover:shadow-lg"
+                style={{ background: "linear-gradient(135deg, #4B0082, #7B2FBE)" }}
+              >
+                <RotateCcw className="w-4 h-4" />
+                Học lại từ đầu
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

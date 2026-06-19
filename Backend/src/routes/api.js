@@ -75,8 +75,6 @@ router.post("/flashcards/:id/review", authMiddleware, flashcardController.review
 router.post("/battle/submit-answer", authMiddleware, battleController.submitAnswer);
 router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
-router.post("/battle/notify-join", authMiddleware, battleController.notifyJoin);
-router.post("/battle/notify-opponent-joined", authMiddleware, battleController.notifyOpponentJoined);
 router.get("/battle/history", authMiddleware, battleController.getHistory);
 router.post("/battle/report-cheating", authMiddleware, battleController.reportCheating);
 
@@ -85,12 +83,35 @@ router.post("/battle/report-cheating", authMiddleware, battleController.reportCh
 // -----------------------------------------------
 router.get("/user/profile", authMiddleware, profileController.getProfile);
 router.put("/user/profile", authMiddleware, profileController.updateProfile);
-router.post("/user/fcm-token", authMiddleware, profileController.updateFcmToken);
-router.post("/users/fcm-token", authMiddleware, profileController.updateFcmToken);
 
 // -----------------------------------------------
-// NOTIFICATION ROUTES
+// EMAIL ROUTES
 // -----------------------------------------------
-router.post("/notifications/check-spaced-repetition", notificationController.checkSpacedRepetition);
+const emailController = require("../controllers/emailController");
+
+// Trigger thủ công để test nhanh khi demo (không cần chờ cron)
+router.post("/email/trigger-review-reminder", authMiddleware, emailController.triggerReviewReminder);
+router.post("/email/trigger-study-report", authMiddleware, emailController.triggerStudyReport);
+
+// -----------------------------------------------
+// SUPPORT ROUTES
+// -----------------------------------------------
+const supportController = require("../controllers/supportController");
+
+router.post("/support/bug-report", authMiddleware, supportController.submitBugReport);
+
+// -----------------------------------------------
+// BATTLE FRAUD DETECTION
+// -----------------------------------------------
+router.post("/battle/report-fraud", authMiddleware, battleController.reportFraud);
+
+// -----------------------------------------------
+// ANALYTICS ROUTES (Zoho Analytics)
+// -----------------------------------------------
+const analyticsController = require("../controllers/analyticsController");
+
+router.get("/analytics/embed-urls", authMiddleware, analyticsController.getEmbedUrls);
+router.post("/analytics/sync", authMiddleware, analyticsController.syncUserAnalytics);
+router.get("/analytics/summary", authMiddleware, analyticsController.getAnalyticsSummary);
 
 module.exports = router;

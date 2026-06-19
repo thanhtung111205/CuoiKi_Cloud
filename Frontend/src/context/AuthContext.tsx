@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   fullName: string;
   avatarUrl: string | null;
+  currentStreak?: number;
 }
 
 interface AuthContextType {

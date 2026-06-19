@@ -1,170 +1,202 @@
 // Backend/src/services/hubspotService.js
+// ====================================================
+// CKI CLOUD G12 - HUBSPOT CRM & TICKETING SERVICE
+// Đồng bộ hồ sơ học viên, tiếp nhận báo cáo lỗi
+// và tự động tạo ticket cảnh báo gian lận
+// ====================================================
 
-const HUBSPOT_API_URL = "https://api.hubapi.com/crm/v3/objects";
+const HUBSPOT_API_BASE = "https://api.hubapi.com";
 
-/**
- * Helper để lấy headers xác thực chung cho các cuộc gọi HubSpot API
- */
-function getHeaders() {
-  const token = process.env.HUBSPOT_ACCESS_TOKEN;
-  if (!token) {
-    console.warn("[HubSpot Service] ⚠️ Cảnh báo: Biến môi trường HUBSPOT_ACCESS_TOKEN chưa được cấu hình!");
+async function _callHubSpot(method, path, body = null) {
+  const HUBSPOT_ACCESS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN;
+
+  if (!HUBSPOT_ACCESS_TOKEN) {
+    console.warn(`[HubSpot] Thiếu HUBSPOT_ACCESS_TOKEN. Bỏ qua: ${method} ${path}`);
+    return { skipped: true };
   }
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`
+
+  const options = {
+    method,
+    headers: {
+      Authorization: `Bearer ${HUBSPOT_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
   };
-}
 
-/**
- * 1. Hàm tạo một Contact mới trên HubSpot CRM
- * @param {string} email - Email của học sinh
- * @param {string} firstName - Tên học sinh
- * @param {string} lastName - Họ học sinh
- * @returns {Promise<string|null>} Trả về contactId (ID của contact vừa tạo hoặc tìm thấy) hoặc null nếu thất bại
- */
-async function createContact(email, firstName, lastName) {
-  try {
-    console.log(`[HubSpot Service] 🔍 Đang tạo Contact cho học sinh: ${firstName} ${lastName} (${email})`);
-    
-    const response = await fetch(`${HUBSPOT_API_URL}/contacts`, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({
-        properties: {
-          email: email,
-          firstname: firstName,
-          lastname: lastName
-        }
-      })
-    });
+  if (body) options.body = JSON.stringify(body);
 
-    const resData = await response.json();
+  const response = await fetch(`${HUBSPOT_API_BASE}${path}`, options);
+  const data = await response.json();
 
-    if (response.ok) {
-      console.log(`[HubSpot Service] ✅ Đã tạo thành công Contact trên HubSpot. ID Contact: ${resData.id}`);
-      return resData.id;
-    } else {
-      // Xử lý trường hợp Contact đã tồn tại (HubSpot trả về mã lỗi 409 Conflict)
-      if (response.status === 409 && resData.message?.includes("existing ID")) {
-        const match = resData.message.match(/ID: (\d+)/);
-        if (match && match[1]) {
-          console.log(`[HubSpot Service] ℹ️ Contact đã tồn tại. Sử dụng ID hiện có: ${match[1]}`);
-          return match[1];
-        }
-      }
-      console.error("[HubSpot Service] ❌ Lỗi từ HubSpot API khi tạo Contact:", JSON.stringify(resData, null, 2));
-      return null;
-    }
-  } catch (error) {
-    console.error("[HubSpot Service] ❌ Lỗi kết nối khi tạo Contact:", error.message);
-    return null;
+  if (!response.ok) {
+    console.error(`[HubSpot] Lỗi ${method} ${path}:`, JSON.stringify(data));
+    throw new Error(data.message || `HubSpot API error ${response.status}`);
   }
+
+  return data;
 }
 
-/**
- * 2. Hàm tạo Ticket cảnh báo gian lận và liên kết với Contact học sinh đã có
- * @param {string} subject - Tiêu đề của Ticket cảnh báo
- * @param {string} content - Nội dung chi tiết cảnh báo
- * @param {string} studentContactId - ID Contact của học sinh đã tạo/tìm thấy ở bước trước
- * @returns {Promise<string|null>} Trả về ticketId vừa tạo hoặc null nếu thất bại
- */
-async function createTicketWithAssociation(subject, content, studentContactId) {
+async function _findContactIdByEmail(email) {
   try {
-    console.log(`[HubSpot Service] 🔍 Đang tạo Ticket cảnh báo gian lận và liên kết với Contact ID: ${studentContactId}...`);
-    
-    const payload = {
-      properties: {
-        subject: subject,
-        content: content,
-        hs_ticket_priority: "HIGH",
-        hs_pipeline: "0",        // Support Pipeline mặc định
-        hs_pipeline_stage: "1"   // Trạng thái "New" của Ticket
-      },
-      // Hướng dẫn liên kết (Associations) chuẩn API v3 của HubSpot:
-      // - "to": đối tượng được liên kết tới (ở đây là Contact học sinh).
-      // - "types": xác định loại mối quan hệ.
-      // - Với mối quan hệ "Ticket to Contact", HubSpot quy định associationTypeId là 16 (loại HUBSPOT_DEFINED).
-      associations: [
+    const data = await _callHubSpot("POST", "/crm/v3/objects/contacts/search", {
+      filterGroups: [
         {
-          to: {
-            id: studentContactId
-          },
-          types: [
-            {
-              associationCategory: "HUBSPOT_DEFINED",
-              associationTypeId: 16 // 16 biểu thị mối quan hệ "Ticket to Contact"
-            }
-          ]
-        }
-      ]
-    };
-
-    const response = await fetch(`${HUBSPOT_API_URL}/tickets`, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
+          filters: [{ propertyName: "email", operator: "EQ", value: email }],
+        },
+      ],
+      properties: ["email"],
+      limit: 1,
     });
 
-    const resData = await response.json();
-
-    if (response.ok) {
-      console.log(`[HubSpot Service] ✅ Tạo Ticket cảnh báo gian lận & liên kết thành công! Ticket ID: ${resData.id}`);
-      return resData.id;
-    } else {
-      console.error("[HubSpot Service] ❌ Lỗi từ HubSpot API khi tạo Ticket có liên kết:", JSON.stringify(resData, null, 2));
-      return null;
+    if (data.results && data.results.length > 0) {
+      return data.results[0].id;
     }
-  } catch (error) {
-    console.error("[HubSpot Service] ❌ Lỗi kết nối khi tạo Ticket có liên kết:", error.message);
+    return null;
+  } catch {
     return null;
   }
 }
 
-/**
- * 3. Hàm tạo Ticket hỗ trợ lỗi (Bug Report) thông thường
- * @param {string} subject - Tiêu đề phản hồi lỗi
- * @param {string} description - Chi tiết mô tả lỗi
- * @param {string} priority - Mức độ ưu tiên (LOW, MEDIUM, HIGH)
- * @returns {Promise<string|null>} Trả về ticketId vừa tạo hoặc null nếu thất bại
- */
-async function createSupportTicket(subject, description, priority = "MEDIUM") {
+// Upsert Contact sau mỗi lần đăng nhập / đăng ký
+// user: { id, email, fullName, currentStreak, totalDecks }
+exports.upsertContact = async (user) => {
   try {
-    console.log(`[HubSpot Service] 🔍 Đang tạo Ticket hỗ trợ lỗi thông thường (${priority})...`);
+    const nameParts = (user.fullName || "").trim().split(" ");
+    const firstname = nameParts.slice(0, -1).join(" ") || nameParts[0] || "";
+    const lastname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
 
-    const payload = {
-      properties: {
-        subject: subject,
-        content: description,
-        hs_ticket_priority: priority,
-        hs_pipeline: "0",        // Support Pipeline mặc định
-        hs_pipeline_stage: "1"   // Trạng thái "New" của Ticket
-      }
-    };
-
-    const response = await fetch(`${HUBSPOT_API_URL}/tickets`, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
+    const result = await _callHubSpot("POST", "/crm/v3/objects/contacts/batch/upsert", {
+      inputs: [
+        {
+          idProperty: "email",
+          id: user.email,
+          properties: {
+            email: user.email,
+            firstname,
+            lastname,
+            app_user_id: user.id,
+            current_streak: user.currentStreak ?? 0,
+            total_decks: user.totalDecks ?? 0,
+          },
+        },
+      ],
     });
 
-    const resData = await response.json();
-
-    if (response.ok) {
-      console.log(`[HubSpot Service] ✅ Tạo Ticket hỗ trợ lỗi thành công! Ticket ID: ${resData.id}`);
-      return resData.id;
-    } else {
-      console.error("[HubSpot Service] ❌ Lỗi từ HubSpot API khi tạo Ticket hỗ trợ:", JSON.stringify(resData, null, 2));
-      return null;
+    if (!result.skipped) {
+      console.log(`[HubSpot] Upsert Contact: ${user.email}`);
     }
+    return result;
   } catch (error) {
-    console.error("[HubSpot Service] ❌ Lỗi kết nối khi tạo Ticket hỗ trợ:", error.message);
-    return null;
+    console.error(`[HubSpot] Lỗi upsert Contact (${user.email}):`, error.message);
   }
-}
+};
 
-module.exports = {
-  createContact,
-  createTicketWithAssociation,
-  createSupportTicket
+// Tạo Ticket cảnh báo gian lận
+// fraudInfo: { userEmail, userId, userFullName, pin, tabSwitchCount, questionIndex, detectedAt }
+exports.createFraudTicket = async (fraudInfo) => {
+  const { userEmail, userId, userFullName, pin, tabSwitchCount, questionIndex, detectedAt } = fraudInfo;
+
+  const PIPELINE_ID = process.env.HUBSPOT_FRAUD_PIPELINE_ID || "0";
+  const STAGE_ID = process.env.HUBSPOT_FRAUD_PIPELINE_STAGE_ID || "1";
+
+  const ticketContent = [
+    `Email học viên : ${userEmail}`,
+    `User ID        : ${userId}`,
+    `Họ tên         : ${userFullName}`,
+    `Mã phòng đấu   : #${pin}`,
+    `Số lần chuyển tab: ${tabSwitchCount} lần`,
+    `Tại câu hỏi số : ${questionIndex + 1}`,
+    `Thời điểm phát hiện: ${detectedAt}`,
+    ``,
+    `HỆ THỐNG TỰ ĐỘNG phát hiện hành vi gian lận trong phiên Quiz Battle.`,
+    `Vui lòng xem xét và xử lý theo quy định của trung tâm.`,
+  ].join("\n");
+
+  try {
+    const ticket = await _callHubSpot("POST", "/crm/v3/objects/tickets", {
+      properties: {
+        subject: `Cảnh báo gian lận - Quiz Battle #${pin} - ${userEmail}`,
+        content: ticketContent,
+        hs_pipeline: PIPELINE_ID,
+        hs_pipeline_stage: STAGE_ID,
+        hs_ticket_priority: "HIGH",
+      },
+    });
+
+    console.log(`[HubSpot] Tạo Fraud Ticket. ID: ${ticket.id} | User: ${userEmail}`);
+
+    const contactId = await _findContactIdByEmail(userEmail);
+    if (contactId && ticket.id) {
+      await exports.associateTicketWithContact(ticket.id, contactId);
+    }
+
+    return ticket;
+  } catch (error) {
+    console.error(`[HubSpot] Lỗi tạo Fraud Ticket cho ${userEmail}:`, error.message);
+    throw error;
+  }
+};
+
+// Gắn Ticket vào Contact
+exports.associateTicketWithContact = async (ticketId, contactId) => {
+  try {
+    await _callHubSpot(
+      "PUT",
+      `/crm/v4/objects/tickets/${ticketId}/associations/contacts/${contactId}`,
+      [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 16 }]
+    );
+    console.log(`[HubSpot] Gắn Ticket ${ticketId} → Contact ${contactId}`);
+  } catch (error) {
+    console.warn(`[HubSpot] Lỗi gắn association Ticket→Contact:`, error.message);
+  }
+};
+
+// Submit Form báo cáo lỗi
+// formData: { email, firstname, issue_type, description, pageUri? }
+exports.submitBugReportForm = async (formData) => {
+  const PORTAL_ID = process.env.HUBSPOT_PORTAL_ID;
+  const FORM_GUID = process.env.HUBSPOT_BUG_REPORT_FORM_GUID;
+
+  if (!PORTAL_ID || !FORM_GUID) {
+    console.warn("[HubSpot] Thiếu HUBSPOT_PORTAL_ID hoặc HUBSPOT_BUG_REPORT_FORM_GUID. Bỏ qua.");
+    return { skipped: true };
+  }
+
+  const payload = {
+    submittedAt: Date.now(),
+    fields: [
+      { objectTypeId: "0-1", name: "email",       value: formData.email },
+      { objectTypeId: "0-1", name: "firstname",   value: formData.firstname || "" },
+      { objectTypeId: "0-1", name: "issue_type",  value: formData.issue_type || "Khác" },
+      { objectTypeId: "0-1", name: "description", value: formData.description || "" },
+    ],
+    context: {
+      pageUri: formData.pageUri || "https://nhom12c365httt.live",
+      pageName: "CKI Flashcard - Bug Report",
+    },
+    legalConsentOptions: {
+      consent: {
+        consentToProcess: true,
+        text: "Tôi đồng ý cho hệ thống xử lý thông tin báo cáo lỗi của mình.",
+      },
+    },
+  };
+
+  const response = await fetch(
+    `https://api.hsforms.com/submissions/v3/integration/submit/${PORTAL_ID}/${FORM_GUID}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    console.error(`[HubSpot] Lỗi submit form báo cáo lỗi:`, err);
+    throw new Error(err.message || `HubSpot Forms API error ${response.status}`);
+  }
+
+  console.log(`[HubSpot] Submit form báo cáo lỗi: ${formData.email}`);
+  return { success: true };
 };

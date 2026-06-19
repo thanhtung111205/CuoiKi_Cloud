@@ -28,6 +28,10 @@ export default function BattleArena() {
   const [historySaved, setHistorySaved] = useState(false);
   const [cheatingReported, setCheatingReported] = useState(false);
 
+  // Fraud detection: đếm số lần chuyển tab trong phiên Battle
+  const tabSwitchCountRef = useRef(0);
+  const fraudReportedRef = useRef(false);
+
   // Decks selection state
   const [decks, setDecks] = useState<any[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState("");
@@ -480,10 +484,43 @@ export default function BattleArena() {
     };
   }, []);
 
-  // 7c. Tự động lưu lịch sử trận đấu khi trận đấu kết thúc (status === "finished")
+  // 7b2. Fraud detection: theo dõi visibilitychange trong phiên playing
+  useEffect(() => {
+    if (!battleData || battleData.status !== "playing" || !pin || !token) return;
+
+    const THRESHOLD = 3;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        tabSwitchCountRef.current += 1;
+
+        if (tabSwitchCountRef.current >= THRESHOLD && !fraudReportedRef.current) {
+          fraudReportedRef.current = true;
+          fetch(`${API_URL}/api/battle/report-fraud`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              pin,
+              tabSwitchCount: tabSwitchCountRef.current,
+              questionIndex: battleData.currentQuestionIndex ?? 0,
+            }),
+          }).catch((err) => console.warn("[BattleArena] Lỗi report-fraud:", err));
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [battleData?.status, pin, token]);
+
+  // 7c. Tự động lưu lịch sử + gửi email kết quả khi trận đấu kết thúc (status === "finished")
   useEffect(() => {
     if (battleData && battleData.status === "finished" && !historySaved && pin) {
       setHistorySaved(true);
+
       const saveHistory = async () => {
         try {
           const response = await fetch(`${API_URL}/api/battle/save-history`, {
@@ -504,7 +541,9 @@ export default function BattleArena() {
           console.error("[BattleArena] Lỗi gọi API lưu lịch sử trận đấu:", err);
         }
       };
+
       saveHistory();
+      if (role === "host") sendResultEmail();
     }
   }, [battleData?.status, pin, historySaved, token]);
 
@@ -1344,7 +1383,7 @@ export default function BattleArena() {
             </div>
           </div>
 
-          {/* Email Result Trigger */}
+          {/* Email Result Status */}
           <div className="mb-6 bg-white border border-gray-300 rounded-xl p-4 text-left">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
@@ -1352,30 +1391,24 @@ export default function BattleArena() {
               </div>
               <div className="flex-1">
                 <p className="text-xs font-black text-gray-800 uppercase">Email Báo Cáo Võ Đài</p>
-                <p className="text-[10px] text-gray-400 font-medium">Gửi kết quả phân định thắng thua, chỉ số máu còn lại qua Resend API.</p>
+                <p className="text-[10px] text-gray-400 font-medium">Kết quả trận đấu tự động gửi tới cả hai người chơi qua Resend API.</p>
               </div>
             </div>
 
-            {emailSent ? (
-              <div className="mt-3 text-center py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg border border-green-200">
-                ✅ Đã gửi email kết quả thành công!
-              </div>
-            ) : (
-              <button
-                onClick={sendResultEmail}
-                disabled={isSendingEmail}
-                className="mt-3 w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-lg transition-colors flex items-center justify-center gap-1 uppercase tracking-wider"
-              >
-                {isSendingEmail ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Đang gửi mail...
-                  </>
-                ) : (
-                  "Gửi Email kết quả ngay"
-                )}
-              </button>
-            )}
+            <div className={`mt-3 text-center py-2 text-xs font-bold rounded-lg border flex items-center justify-center gap-1.5 ${
+              emailSent
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-indigo-50 text-indigo-600 border-indigo-200"
+            }`}>
+              {emailSent ? (
+                "✅ Đã gửi email kết quả thành công!"
+              ) : (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Đang gửi email kết quả...
+                </>
+              )}
+            </div>
           </div>
 
           {/* Return Home */}

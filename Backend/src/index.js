@@ -30,6 +30,9 @@ const server = http.createServer(app);
 // Import con Worker xử lý ngầm để lắng nghe hàng đợi Pub/Sub
 const { startWorker } = require("./workers/generationWorker");
 
+// Import Scheduler gửi email tự động theo lịch
+const { startScheduler } = require("./scheduler");
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://cuoiki-cloud.pages.dev",
@@ -391,6 +394,14 @@ io.on("connection", (socket) => {
 // ====================================================
 const PORT = process.env.PORT || 8080;
 
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} is already in use. Kill the process and retry.`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(PORT, () => {
   console.log("====================================================");
   console.log(" CKI CLOUD G12 - Backend Server");
@@ -406,4 +417,7 @@ server.listen(PORT, () => {
   console.log("====================================================");
   // Khởi chạy tiến trình nền lắng nghe task sinh bộ flashcard
   startWorker();
+
+  // Khởi chạy các cron job gửi email tự động
+  startScheduler();
 });
