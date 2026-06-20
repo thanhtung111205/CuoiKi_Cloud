@@ -79,9 +79,13 @@ export default function Dashboard() {
           toast.error("Không thể kích hoạt thông báo", {
             description: "Bạn đã chặn quyền thông báo. Vui lòng mở lại trong cài đặt trang web.",
           });
+        } else if (currentPerm === "granted") {
+          toast.error("Không thể lấy FCM Token", {
+            description: "Quyền thông báo đã được cấp, nhưng không thể kết nối hoặc khởi tạo dịch vụ thông báo tin nhắn Firebase.",
+          });
         } else {
           toast.warning("Thông báo chưa được kích hoạt", {
-            description: "Quyền thông báo chưa được cấp.",
+            description: "Quyền thông báo chưa được cấp hoặc bị trình duyệt bỏ qua.",
           });
         }
       }

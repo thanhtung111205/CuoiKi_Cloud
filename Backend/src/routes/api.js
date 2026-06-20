@@ -77,17 +77,25 @@ router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
 router.get("/battle/history", authMiddleware, battleController.getHistory);
 router.post("/battle/report-cheating", authMiddleware, battleController.reportCheating);
+router.post("/battle/notify-opponent-joined", authMiddleware, battleController.notifyOpponentJoined);
 
 // -----------------------------------------------
 // USER PROFILE ROUTES
 // -----------------------------------------------
 router.get("/user/profile", authMiddleware, profileController.getProfile);
 router.put("/user/profile", authMiddleware, profileController.updateProfile);
+router.post("/users/fcm-token", authMiddleware, profileController.updateFcmToken);
+router.post("/user/fcm-token", authMiddleware, profileController.updateFcmToken);
 
 // Endpoint giả lập ngày hoạt động (chỉ cho phép ở môi trường dev hoặc khi được bật cấu hình)
 if (process.env.NODE_ENV !== "production" || process.env.ALLOW_STREAK_MOCK === "true") {
   router.post("/user/mock-active-date", authMiddleware, profileController.mockActiveDate);
 }
+
+// -----------------------------------------------
+// NOTIFICATION ROUTES
+// -----------------------------------------------
+router.post("/notifications/check-spaced-repetition", authMiddleware, notificationController.checkSpacedRepetition);
 
 // -----------------------------------------------
 // EMAIL ROUTES

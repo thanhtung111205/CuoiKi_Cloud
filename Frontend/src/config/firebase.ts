@@ -48,6 +48,13 @@ export const requestForToken = async (): Promise<string | null> => {
       let currentToken;
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        
+        // Chờ Service Worker chuyển sang trạng thái hoạt động (active) hoàn toàn để tránh lỗi no active Service Worker
+        await navigator.serviceWorker.ready;
+        while (!registration.active || registration.active.state !== 'activated') {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        
         currentToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
       } else {
         currentToken = await getToken(messaging, { vapidKey });
