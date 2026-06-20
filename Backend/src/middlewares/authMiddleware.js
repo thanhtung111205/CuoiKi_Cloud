@@ -20,6 +20,16 @@ try {
  * Middleware xác thực yêu cầu API sử dụng hệ thống JWT hoặc Firebase ID Token
  */
 module.exports = async (req, res, next) => {
+  // 0. Hỗ trợ GCP Cloud Scheduler bypass qua X-Scheduler-Key
+  const schedulerKey = req.headers["x-scheduler-key"];
+  if (schedulerKey && process.env.SCHEDULER_KEY && schedulerKey === process.env.SCHEDULER_KEY) {
+    req.user = {
+      userId: "scheduler-cron-job",
+      email: "scheduler@gcp.cron"
+    };
+    return next();
+  }
+
   const authHeader = req.headers["authorization"] || req.headers["Authorization"];
   const token = authHeader && authHeader.split(" ")[1];
 
