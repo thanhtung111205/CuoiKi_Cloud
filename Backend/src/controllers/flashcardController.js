@@ -1,5 +1,6 @@
 const prisma = require("../db");
 const aiServices = require("../services/aiServices");
+const streakHelper = require("../utils/streakHelper");
 
 /**
  * POST /api/flashcards
@@ -269,6 +270,13 @@ exports.reviewFlashcard = async (req, res) => {
         nextReviewDate,
       }
     });
+
+    // Cập nhật streak người dùng (bọc try-catch để tránh làm gián đoạn luồng chính)
+    try {
+      await streakHelper.updateUserStreak(userId);
+    } catch (streakError) {
+      console.error("[FlashcardController] ⚠️ Lỗi cập nhật streak người dùng:", streakError.message);
+    }
 
     return res.status(200).json({
       success: true,

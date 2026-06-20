@@ -148,6 +148,7 @@ exports.googleLogin = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -187,6 +188,7 @@ exports.getMe = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -333,6 +335,7 @@ exports.emailLogin = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -460,6 +463,7 @@ exports.emailSignup = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {

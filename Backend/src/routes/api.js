@@ -84,6 +84,11 @@ router.post("/battle/report-cheating", authMiddleware, battleController.reportCh
 router.get("/user/profile", authMiddleware, profileController.getProfile);
 router.put("/user/profile", authMiddleware, profileController.updateProfile);
 
+// Endpoint giả lập ngày hoạt động (chỉ cho phép ở môi trường dev hoặc khi được bật cấu hình)
+if (process.env.NODE_ENV !== "production" || process.env.ALLOW_STREAK_MOCK === "true") {
+  router.post("/user/mock-active-date", authMiddleware, profileController.mockActiveDate);
+}
+
 // -----------------------------------------------
 // EMAIL ROUTES
 // -----------------------------------------------
