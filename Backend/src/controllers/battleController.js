@@ -532,19 +532,25 @@ exports.notifyOpponentJoined = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phòng đấu thiếu thông tin Host." });
     }
 
-    // 2. Tra cứu fcmToken của Host trong PostgreSQL
-    const hostUser = await prisma.user.findUnique({
-      where: { id: hostId },
-      select: { fcmToken: true }
-    });
+    // 2. Tra cứu fcmToken của Host từ Firestore trước (vì đã được lưu trực tiếp lúc tạo phòng), nếu không có thì tra cứu PostgreSQL
+    let hostFCMToken = battleData.hostFCMToken;
+    if (!hostFCMToken) {
+      const hostUser = await prisma.user.findUnique({
+        where: { id: hostId },
+        select: { fcmToken: true }
+      });
+      if (hostUser && hostUser.fcmToken) {
+        hostFCMToken = hostUser.fcmToken;
+      }
+    }
 
-    if (!hostUser || !hostUser.fcmToken) {
-      console.log(`[battleController] Host (${hostId}) không đăng ký FCM Token trong DB, bỏ qua.`);
+    if (!hostFCMToken) {
+      console.log(`[battleController] Host (${hostId}) không đăng ký FCM Token ở cả DB và Firestore, bỏ qua.`);
       return res.json({ success: true, message: "Host không cấu hình FCM Token." });
     }
 
     const message = {
-      token: hostUser.fcmToken,
+      token: hostFCMToken,
       notification: {
         title: "Đấu trường 1v1",
         body: `Đã tìm thấy đối thủ! ${guestName || "Đối thủ"} đã vào phòng. Trận đấu bắt đầu!`,

@@ -77,6 +77,7 @@ router.post("/battle/send-email", authMiddleware, battleController.sendEmail);
 router.post("/battle/save-history", authMiddleware, battleController.saveHistory);
 router.get("/battle/history", authMiddleware, battleController.getHistory);
 router.post("/battle/report-cheating", authMiddleware, battleController.reportCheating);
+router.post("/battle/notify-opponent-joined", authMiddleware, battleController.notifyOpponentJoined);
 
 // -----------------------------------------------
 // USER PROFILE ROUTES
