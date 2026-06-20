@@ -2,6 +2,7 @@ const admin = require("firebase-admin");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const prisma = require("../db");
+const hubspotService = require("../services/hubspotService");
 
 // Đảm bảo Firebase Admin SDK được khởi tạo an toàn
 try {
@@ -154,88 +155,21 @@ exports.sendEmail = async (req, res) => {
     }
 
     const battleData = roomDoc.data();
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
     console.log(`[battleController] Chuẩn bị gửi email kết quả cho phòng #${pin}`);
-    
-    const recipients = [battleData.hostEmail, battleData.guestEmail].filter(Boolean);
-    if (recipients.length === 0) {
-      return res.status(400).json({ success: false, message: "Không tìm thấy email của người chơi nào." });
-    }
 
-    if (RESEND_API_KEY) {
-      try {
-        const response = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${RESEND_API_KEY}`,
-          },
-          body: JSON.stringify({
-            from: "Võ Đài Flashcard <onboarding@resend.dev>",
-            to: recipients,
-            subject: `🏆 Kết Quả Trận Đấu Flashcard Realtime - Phòng #${pin}`,
-            html: `
-              <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px;">
-                <h2 style="color: #4B0082; text-align: center; border-bottom: 2px solid #4B0082; padding-bottom: 10px;">🏆 Báo Cáo Kết Quả Đấu Trường Realtime 🏆</h2>
-                <p>Xin chào các chiến binh, trận đấu tại đấu trường Flashcard <strong>phòng #${pin}</strong> đã kết thúc phân định thắng bại!</p>
-                
-                <table border="1" cellpadding="12" cellspacing="0" style="border-collapse: collapse; width: 100%; text-align: center; margin-top: 15px;">
-                  <thead>
-                    <tr style="background-color: #f2f2f2; font-weight: bold;">
-                      <th>Người chơi</th>
-                      <th>Email</th>
-                      <th>HP Còn Lại</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td><strong>${battleData.hostName} (Host)</strong></td>
-                      <td>${battleData.hostEmail || "Chưa thiết lập"}</td>
-                      <td><span style="color: ${battleData.hostHP > 0 ? "#10B981" : "#EF4444"}; font-weight: bold; font-size: 16px;">${battleData.hostHP} HP</span></td>
-                    </tr>
-                    <tr>
-                      <td><strong>${battleData.guestName} (Guest)</strong></td>
-                      <td>${battleData.guestEmail || "Chưa thiết lập"}</td>
-                      <td><span style="color: ${battleData.guestHP > 0 ? "#10B981" : "#EF4444"}; font-weight: bold; font-size: 16px;">${battleData.guestHP} HP</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-                
-                <div style="margin-top: 25px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; text-align: center; font-weight: bold; color: #4B0082;">
-                  ${
-                    battleData.hostHP === battleData.guestHP
-                      ? "🤝 KẾT QUẢ: HÒA NHAU! Hai chiến binh bất phân thắng bại!"
-                      : battleData.hostHP > battleData.guestHP
-                      ? `🎉 CHIẾN THẮNG THUỘC VỀ: ${battleData.hostName.toUpperCase()}!`
-                      : `🎉 CHIẾN THẮNG THUỘC VỀ: ${battleData.guestName.toUpperCase()}!`
-                  }
-                </div>
-                
-                <p style="font-size: 11px; color: #777; margin-top: 30px; text-align: center; border-top: 1px solid #eee; padding-top: 10px;">
-                  Hệ thống Đấu Trường Flashcard trực tuyến. Thiết kế bởi CKI Cloud Nhóm 12.
-                </p>
-              </div>
-            `,
-          }),
-        });
+    const emailService = require("../services/emailService");
+    await emailService.sendBattleResult({
+      pin,
+      hostName: battleData.hostName,
+      hostEmail: battleData.hostEmail,
+      hostHP: battleData.hostHP,
+      guestName: battleData.guestName,
+      guestEmail: battleData.guestEmail,
+      guestHP: battleData.guestHP,
+    });
 
-        const resData = await response.json();
-        if (response.ok) {
-          console.log("[battleController] Gửi email qua Resend thành công:", resData);
-          return res.json({ success: true, message: "Gửi báo cáo email kết quả thành công.", id: resData.id });
-        } else {
-          console.error("[battleController] Resend API trả về lỗi:", resData);
-          return res.status(500).json({ success: false, message: "Không thể gửi email qua Resend.", error: resData });
-        }
-      } catch (err) {
-        console.error("[battleController] Lỗi kết nối tới Resend API:", err);
-        return res.status(500).json({ success: false, message: "Lỗi kết nối khi gửi email.", error: err.message });
-      }
-    } else {
-      console.log("[battleController] [MOCK SEND] Không phát hiện RESEND_API_KEY. Đã giả lập gửi báo cáo thành công.");
-      return res.json({ success: true, message: "Gửi email báo cáo thành công (Chế độ giả lập development)." });
-    }
+    return res.json({ success: true, message: "Gửi báo cáo email kết quả thành công." });
   } catch (error) {
     console.error("[battleController] Lỗi sendEmail:", error);
     return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
@@ -333,6 +267,98 @@ exports.saveHistory = async (req, res) => {
   } catch (error) {
     console.error("[battleController] Lỗi khi lưu lịch sử trận đấu:", error);
     return res.status(500).json({ success: false, message: "Lỗi Server Internal.", error: error.message });
+  }
+};
+
+/**
+ * POST /api/battle/report-fraud
+ * FE gọi khi phát hiện người dùng chuyển tab quá ngưỡng trong Quiz Battle
+ * Body: { pin, tabSwitchCount, questionIndex }
+ */
+exports.reportFraud = async (req, res) => {
+  try {
+    const { pin, tabSwitchCount, questionIndex = 0 } = req.body;
+    const reqUserId = req.user.userId;
+    const reqEmail = req.user.email;
+
+    if (!pin) {
+      return res.status(400).json({ success: false, message: "Thiếu mã PIN phòng đấu." });
+    }
+
+    const THRESHOLD = parseInt(process.env.FRAUD_TAB_SWITCH_THRESHOLD) || 3;
+    if (!tabSwitchCount || tabSwitchCount < THRESHOLD) {
+      return res.status(400).json({
+        success: false,
+        message: `Số lần chuyển tab (${tabSwitchCount}) chưa đạt ngưỡng cảnh báo (${THRESHOLD}).`,
+      });
+    }
+
+    const roomRef = db.collection("battles").doc(pin);
+    const roomDoc = await roomRef.get();
+
+    if (!roomDoc.exists) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy phòng đấu." });
+    }
+
+    const battleData = roomDoc.data();
+    const isInRoom =
+      battleData.hostId === reqUserId ||
+      battleData.guestId === reqUserId ||
+      battleData.hostEmail === reqEmail ||
+      battleData.guestEmail === reqEmail;
+
+    if (!isInRoom) {
+      return res.status(403).json({ success: false, message: "Bạn không thuộc phòng đấu này." });
+    }
+
+    // Chống spam: chỉ tạo ticket một lần cho mỗi user/phòng
+    const fraudLogKey = `fraudReported_${reqUserId}`;
+    if (battleData[fraudLogKey] === true) {
+      return res.status(200).json({
+        success: true,
+        message: "Hành vi này đã được ghi nhận trước đó.",
+        alreadyReported: true,
+      });
+    }
+
+    let userFullName = reqEmail;
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: reqUserId },
+        select: { fullName: true },
+      });
+      if (dbUser) userFullName = dbUser.fullName;
+    } catch {
+      // Không block nếu lỗi DB — vẫn tạo ticket với email
+    }
+
+    const detectedAt = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+    console.log(`[BattleController] Phát hiện gian lận! User: ${reqEmail} | Phòng: #${pin} | Tab switch: ${tabSwitchCount} lần`);
+
+    await hubspotService.createFraudTicket({
+      userEmail: reqEmail,
+      userId: reqUserId,
+      userFullName,
+      pin,
+      tabSwitchCount,
+      questionIndex,
+      detectedAt,
+    });
+
+    await roomRef.update({ [fraudLogKey]: true });
+
+    return res.status(201).json({
+      success: true,
+      message: "Hành vi gian lận đã được ghi nhận và báo cáo.",
+    });
+  } catch (error) {
+    console.error("[BattleController] Lỗi reportFraud:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi Server Internal.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 

@@ -22,6 +22,7 @@ services:
       PORT: 8080
       NODE_ENV: production
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/flashcard_db?schema=public&connection_limit=5"
+      ALLOW_STREAK_MOCK: "true"
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-key.json
       PUBSUB_TOPIC_NAME: flashcard-generation-tasks-local
       PUBSUB_SUBSCRIPTION_NAME: flashcard-generation-tasks-sub-local

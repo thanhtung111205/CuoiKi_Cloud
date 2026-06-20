@@ -3,8 +3,7 @@
 // Tái sử dụng logic này ở nhiều nơi (profile, dashboard, etc)
 // ====================================================
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../db");
 
 /**
  * Lấy toàn bộ thống kê của một user

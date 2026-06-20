@@ -1,8 +1,8 @@
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../db");
 const admin = require("firebase-admin");
 const jwt = require("jsonwebtoken");
-
-const prisma = new PrismaClient();
+const hubspotService = require("../services/hubspotService");
+const emailService = require("../services/emailService");
 
 // Đảm bảo lấy đúng đối tượng admin trong mọi trường hợp import CJS/ESM của phiên bản v14
 const firebaseAdmin = admin.initializeApp ? admin : (admin.default || admin);
@@ -86,7 +86,11 @@ exports.googleLogin = async (req, res) => {
     // Truy vấn hoặc tạo mới user sử dụng Prisma (upsert bảo đảm tính toàn vẹn)
     // Bọc trong try-catch riêng cho DB để tránh sập app nếu mất kết nối Postgres
     let user;
+    let isNewUser = false;
     try {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      isNewUser = !existingUser;
+
       user = await prisma.user.upsert({
         where: { email },
         update: {
@@ -108,6 +112,25 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
+    // Gửi email chào mừng nếu là tài khoản Google mới (bất đồng bộ, không block response)
+    if (isNewUser) {
+      emailService.sendAccountConfirmation(user.email, user.fullName)
+        .catch((err) => console.warn("[Auth] Lỗi gửi email chào mừng Google:", err.message));
+    }
+
+    // Đồng bộ hồ sơ lên HubSpot (bất đồng bộ, không block response)
+    prisma.deck.count({ where: { userId: user.id } })
+      .then((totalDecks) => {
+        hubspotService.upsertContact({
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          currentStreak: user.currentStreak,
+          totalDecks,
+        });
+      })
+      .catch((err) => console.warn("[Auth] Lỗi sync HubSpot Contact:", err.message));
+
     // Sinh JWT Token cho hệ thống của chúng ta để client dùng cho các API sau
     const jwtSecret = process.env.JWT_SECRET || "cki_cloud_g12_default_secret_key_123456";
     const appToken = jwt.sign(
@@ -125,6 +148,7 @@ exports.googleLogin = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -164,6 +188,7 @@ exports.getMe = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -280,6 +305,19 @@ exports.emailLogin = async (req, res) => {
       });
     }
 
+    // Đồng bộ hồ sơ lên HubSpot (bất đồng bộ, không block response)
+    prisma.deck.count({ where: { userId: user.id } })
+      .then((totalDecks) => {
+        hubspotService.upsertContact({
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          currentStreak: user.currentStreak,
+          totalDecks,
+        });
+      })
+      .catch((err) => console.warn("[Auth] Lỗi sync HubSpot Contact:", err.message));
+
     // Sinh JWT Token
     const jwtSecret = process.env.JWT_SECRET || "cki_cloud_g12_default_secret_key_123456";
     const appToken = jwt.sign(
@@ -297,6 +335,7 @@ exports.emailLogin = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {
@@ -392,6 +431,21 @@ exports.emailSignup = async (req, res) => {
       });
     }
 
+    // Gửi email xác nhận tài khoản bất đồng bộ, không chặn response
+    const emailService = require("../services/emailService");
+    emailService.sendAccountConfirmation(user.email, user.fullName).catch((err) => {
+      console.warn("[Auth Signup] Không thể gửi email xác nhận:", err.message);
+    });
+
+    // Đồng bộ hồ sơ lên HubSpot (user mới: streak=0, decks=0)
+    hubspotService.upsertContact({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      currentStreak: 0,
+      totalDecks: 0,
+    }).catch((err) => console.warn("[Auth] Lỗi sync HubSpot Contact:", err.message));
+
     // Sinh JWT Token
     const jwtSecret = process.env.JWT_SECRET || "cki_cloud_g12_default_secret_key_123456";
     const appToken = jwt.sign(
@@ -409,6 +463,7 @@ exports.emailSignup = async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        currentStreak: user.currentStreak,
       },
     });
   } catch (error) {

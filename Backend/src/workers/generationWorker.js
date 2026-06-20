@@ -1,13 +1,11 @@
 // Backend/src/workers/generationWorker.js
 const { PubSub } = require("@google-cloud/pubsub");
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../db");
 const { translateTextBatch, searchImage, extractVocabulary, generateAudio } = require("../services/aiServices");
 
 const pubsub = new PubSub({
   projectId: "flashcard-cloud-g12" // Điền chính xác ID dự án GCP của nhóm mày
 });
-
-const prisma = new PrismaClient();
 
 const subscriptionName = process.env.PUBSUB_SUBSCRIPTION_NAME || "flashcard-generation-tasks-sub";
 

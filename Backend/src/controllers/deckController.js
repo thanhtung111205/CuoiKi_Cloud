@@ -26,7 +26,7 @@ const { publishGenerationTask } = require("../services/pubsubService");
  */
 exports.generateDeck = async (req, res) => {
   try {
-    const { text, autoTranslate, autoAudio } = req.body;
+    const { title, text, autoTranslate, autoAudio } = req.body;
 
     // 1. --- Validate dữ liệu đầu vào nghiêm ngặt ---
     if (!text || typeof text !== "string" || text.trim().length === 0) {
@@ -111,12 +111,13 @@ exports.generateDeck = async (req, res) => {
 
     // Trích xuất tiêu đề tự động từ 30 ký tự đầu tiên của văn bản để làm tên bộ thẻ tạm thời
     const autoTitle = text.trim().substring(0, 30) + (text.length > 30 ? "..." : "");
+    const finalTitle = title && title.trim() ? title.trim() : `Bộ thẻ: ${autoTitle}`;
 
     // 2. --- Lưu thông tin bộ thẻ tạm thời vào PostgreSQL qua Prisma ---
     // Đặt trạng thái ban đầu là 'processing' theo đúng thiết kế Schema hệ thống
     const newDeck = await prisma.deck.create({
       data: {
-        title: `Bộ thẻ: ${autoTitle}`,
+        title: finalTitle,
         description: "Bộ thẻ ghi nhớ được tạo tự động bởi AI",
         sourceText: text,
         status: "processing", 

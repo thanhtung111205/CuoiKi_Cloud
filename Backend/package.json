@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "predev": "npx kill-port 8080 || true",
+    "dev": "nodemon src/index.js",
+    "kill": "npx kill-port 8080"
   },
   "keywords": [
     "flashcard",
@@ -30,8 +32,10 @@
     "googleapis": "^173.0.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
+    "node-cron": "^4.4.1",
     "nodemailer": "^9.0.0",
     "prisma": "^5.22.0",
+    "resend": "^6.13.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

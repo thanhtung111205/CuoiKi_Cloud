@@ -2,10 +2,8 @@
 // PROFILE CONTROLLER - Quản lý hồ sơ tài khoản
 // ====================================================
 
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../db");
 const { getUserStats, getCardsDueToday } = require("../utils/statsHelper");
-
-const prisma = new PrismaClient();
 
 /**
  * GET /api/user/profile
@@ -162,4 +160,59 @@ exports.updateFcmToken = async (req, res) => {
       message: "Lỗi hệ thống khi lưu FCM Token."
     });
   }
-};
+};
+
+/**
+ * POST /api/user/mock-active-date
+ * Thay đổi ngày hoạt động cuối cùng của user để kiểm tra chức năng streak (chỉ dùng cho phát triển/thử nghiệm)
+ */
+exports.mockActiveDate = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { daysAgo } = req.body;
+
+    if (daysAgo === undefined || isNaN(daysAgo)) {
+      return res.status(400).json({
+        success: false,
+        message: "Yêu cầu truyền vào số ngày lùi lại (daysAgo) hợp lệ."
+      });
+    }
+
+    const mockDate = new Date();
+    mockDate.setDate(mockDate.getDate() - parseInt(daysAgo));
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastActiveDate: mockDate
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        currentStreak: true,
+        longestStreak: true,
+        lastActiveDate: true,
+      }
+    });
+
+    console.log(`[Streak Mock] Set user ${userId} lastActiveDate to ${mockDate.toISOString()} (${daysAgo} days ago)`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Đã đổi ngày hoạt động cuối cùng thành ${daysAgo} ngày trước.`,
+      data: {
+        userId: updatedUser.id,
+        currentStreak: updatedUser.currentStreak,
+        lastActiveDate: updatedUser.lastActiveDate,
+      }
+    });
+  } catch (error) {
+    console.error("[Profile Controller] Lỗi mockActiveDate:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi hệ thống khi thiết lập ngày hoạt động giả lập."
+    });
+  }
+};
+
