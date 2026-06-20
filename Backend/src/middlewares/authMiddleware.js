@@ -1,9 +1,7 @@
 const admin = require("firebase-admin");
 const { getAuth } = require("firebase-admin/auth");
 const jwt = require("jsonwebtoken");
-const { PrismaClient } = require("@prisma/client");
-
-const prisma = new PrismaClient();
+const prisma = require("../db");
 
 // Kiểm tra và khởi tạo Firebase Admin SDK an toàn tuyệt đối
 try {

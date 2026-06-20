@@ -1,10 +1,8 @@
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../db");
 const admin = require("firebase-admin");
 const jwt = require("jsonwebtoken");
 const hubspotService = require("../services/hubspotService");
 const emailService = require("../services/emailService");
-
-const prisma = new PrismaClient();
 
 // Đảm bảo lấy đúng đối tượng admin trong mọi trường hợp import CJS/ESM của phiên bản v14
 const firebaseAdmin = admin.initializeApp ? admin : (admin.default || admin);

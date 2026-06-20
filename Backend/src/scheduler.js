@@ -8,10 +8,8 @@
 // ====================================================
 
 const cron = require("node-cron");
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("./db");
 const emailService = require("./services/emailService");
-
-const prisma = new PrismaClient();
 
 // -----------------------------------------------
 // Job 1: Nhắc nhở ôn tập - Hằng ngày lúc 8:00 sáng VN (1:00 UTC)

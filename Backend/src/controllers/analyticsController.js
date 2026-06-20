@@ -43,7 +43,7 @@ async function aggregateStudyActivity(userId) {
     byDay[day].total++;
   }
 
-  return Object.entries(byDay).map(([day, counts]) => ({
+  const rows = Object.entries(byDay).map(([day, counts]) => ({
     user_id: userId,
     review_date: day,
     cards_reviewed: counts.total,
@@ -51,6 +51,13 @@ async function aggregateStudyActivity(userId) {
     good_count: counts.good,
     easy_count: counts.easy,
   }));
+
+  if (rows.length === 0) {
+    const today = new Date().toISOString().split("T")[0];
+    rows.push({ user_id: userId, review_date: today, cards_reviewed: 0, hard_count: 0, good_count: 0, easy_count: 0 });
+  }
+
+  return rows;
 }
 
 // -----------------------------------------------
@@ -103,7 +110,7 @@ async function aggregateDeckProgress(userId) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  return decks.map((deck) => {
+  const rows = decks.map((deck) => {
     const total = deck.flashcards.length;
     const studied = deck.flashcards.filter((f) => f.progresses.length > 0).length;
     return {
@@ -115,6 +122,12 @@ async function aggregateDeckProgress(userId) {
       synced_at: today,
     };
   });
+
+  if (rows.length === 0) {
+    rows.push({ user_id: userId, deck_title: "-", total_cards: 0, studied_cards: 0, progress_percent: 0, synced_at: today });
+  }
+
+  return rows;
 }
 
 // -----------------------------------------------
@@ -163,10 +176,10 @@ exports.syncUserAnalytics = async (req, res) => {
     ]);
 
     const syncResults = await Promise.allSettled([
-      analyticsService.importData("study_activity", toCSV(activityData)),
-      analyticsService.importData("vocab_mastery", toCSV(masteryData)),
-      analyticsService.importData("deck_progress", toCSV(deckData)),
-      analyticsService.importData("battle_stats", toCSV(battleData)),
+      analyticsService.importData("study_activity", toCSV(activityData), "user_id,review_date"),
+      analyticsService.importData("vocab_mastery", toCSV(masteryData), "user_id,mastery_level"),
+      analyticsService.importData("deck_progress", toCSV(deckData), "user_id,deck_title"),
+      analyticsService.importData("battle_stats", toCSV(battleData), "user_id"),
     ]);
 
     const labels = ["study_activity", "vocab_mastery", "deck_progress", "battle_stats"];

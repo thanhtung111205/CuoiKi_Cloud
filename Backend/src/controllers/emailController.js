@@ -2,8 +2,7 @@
 // CKI CLOUD G12 - EMAIL CONTROLLER
 // ====================================================
 
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../db");
 const emailService = require("../services/emailService");
 const { runDailyReviewReminder, runWeeklyStudyReport } = require("../scheduler");
 

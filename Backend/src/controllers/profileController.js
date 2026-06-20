@@ -2,10 +2,8 @@
 // PROFILE CONTROLLER - Quản lý hồ sơ tài khoản
 // ====================================================
 
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../db");
 const { getUserStats, getCardsDueToday } = require("../utils/statsHelper");
-
-const prisma = new PrismaClient();
 
 /**
  * GET /api/user/profile
@@ -162,4 +160,4 @@ exports.updateFcmToken = async (req, res) => {
       message: "Lỗi hệ thống khi lưu FCM Token."
     });
   }
-};
+};

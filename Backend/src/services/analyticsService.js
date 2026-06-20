@@ -51,7 +51,7 @@ async function getAccessToken() {
 // -----------------------------------------------
 // Đẩy dữ liệu CSV lên một bảng (View) trong Zoho Analytics
 // -----------------------------------------------
-exports.importData = async (tableName, csvRows) => {
+exports.importData = async (tableName, csvRows, matchingColumns) => {
   const ZOHO_OWNER_EMAIL = process.env.ZOHO_OWNER_EMAIL;
   const ZOHO_WORKSPACE_NAME = process.env.ZOHO_WORKSPACE_NAME || "CKI Flashcard Analytics";
 
@@ -67,13 +67,17 @@ exports.importData = async (tableName, csvRows) => {
   const params = new URLSearchParams({
     ZOHO_ACTION: "IMPORT",
     ZOHO_API_VERSION: "1.0",
-    ZOHO_IMPORT_TYPE: "TRUNCATEADD",
+    ZOHO_IMPORT_TYPE: matchingColumns ? "UPDATEADD" : "TRUNCATEADD",
     ZOHO_CREATE_TABLE: "false",
     ZOHO_AUTO_IDENTIFY: "true",
     ZOHO_ON_IMPORT_ERROR: "SETCOLUMNEMPTY",
     ZOHO_OUTPUT_FORMAT: "JSON",
     ZOHO_IMPORT_DATA: csvRows,
   });
+
+  if (matchingColumns) {
+    params.set("ZOHO_MATCHING_COLUMNS", matchingColumns);
+  }
 
   const response = await fetch(url, {
     method: "POST",

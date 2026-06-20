@@ -517,6 +517,7 @@ export default function Dashboard() {
                     height="300"
                     frameBorder="0"
                     title={title}
+                    loading="lazy"
                     className="block"
                   />
                 </div>
@@ -530,6 +531,7 @@ export default function Dashboard() {
                   height="300"
                   frameBorder="0"
                   title="Phân bố Ease Factor"
+                  loading="lazy"
                   className="block"
                 />
               </div>
